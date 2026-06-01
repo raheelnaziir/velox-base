@@ -92,45 +92,44 @@ function DEXApp() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '14px 32px',
+        padding: '12px 32px',
         background: '#f0eeff',
         position: 'sticky',
         top: 0,
         zIndex: 10,
       }}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{
-            width: '36px', height: '36px', borderRadius: '10px',
-            background: 'linear-gradient(135deg, #6d28d9, #4f46e5)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '18px',
-          }}>⚡</div>
-          <span style={{ fontWeight: '800', fontSize: '20px', color: '#1e1b4b' }}>Velox</span>
+        {/* Left — Logo + Nav links */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+          {/* Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '10px',
+              background: 'linear-gradient(135deg, #6d28d9, #4f46e5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '18px',
+            }}>⚡</div>
+            <span style={{ fontWeight: '800', fontSize: '20px', color: '#1e1b4b' }}>BaseDEX</span>
+          </div>
+
+          {/* Nav links */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {(['swap', 'portfolio'] as Tab[]).map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{
+                padding: '8px 18px', borderRadius: '20px', border: 'none',
+                background: tab === t ? 'white' : 'transparent',
+                color: tab === t ? '#1e1b4b' : '#6b7280',
+                fontWeight: tab === t ? '600' : '400',
+                fontSize: '15px', cursor: 'pointer',
+                boxShadow: tab === t ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.15s',
+              }}>
+                {t === 'swap' ? 'Trade' : 'Portfolio'}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Tabs */}
-        <div style={{
-          display: 'flex', gap: '4px',
-          background: 'white',
-          borderRadius: '14px', padding: '4px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-        }}>
-          {(['swap', 'portfolio'] as Tab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              padding: '9px 24px', borderRadius: '10px', border: 'none',
-              background: tab === t ? '#6d28d9' : 'transparent',
-              color: tab === t ? 'white' : '#6b7280',
-              fontWeight: '600',
-              fontSize: '14px', cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}>
-              {t === 'swap' ? 'Trade' : 'Portfolio'}
-            </button>
-          ))}
-        </div>
-
-        {/* Wallet */}
+        {/* Right — Wallet */}
         <Wallet>
           <ConnectWallet>
             <Avatar className="h-6 w-6" />
