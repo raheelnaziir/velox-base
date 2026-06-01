@@ -54,7 +54,16 @@ const DAI = {
   chainId: base.id,
 }
 
-const TOKENS = [ETH, USDC, USDT, DAI]
+const WETH = {
+  name: 'Wrapped Ether',
+  address: '0x4200000000000000000000000000000000000006' as `0x${string}`,
+  symbol: 'WETH',
+  decimals: 18,
+  image: 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
+  chainId: base.id,
+}
+
+const TOKENS = [ETH, USDC, USDT, DAI, WETH]
 
 type Tab = 'swap' | 'portfolio'
 
@@ -72,44 +81,56 @@ function DEXApp() {
   }, [])
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f5f3ff', fontFamily: 'sans-serif' }}>
+    <div style={{
+      minHeight: '100vh',
+      background: '#f0eeff',
+      fontFamily: 'sans-serif',
+    }}>
 
       {/* Navbar */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px 32px', background: 'white',
-        borderBottom: '1px solid #ede9fe',
-        position: 'sticky', top: 0, zIndex: 10,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '14px 32px',
+        background: '#f0eeff',
+        position: 'sticky',
+        top: 0,
+        zIndex: 10,
       }}>
+        {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
-            width: '34px', height: '34px', borderRadius: '10px',
-            background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+            width: '36px', height: '36px', borderRadius: '10px',
+            background: 'linear-gradient(135deg, #6d28d9, #4f46e5)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '18px',
           }}>⚡</div>
-          <span style={{ fontWeight: '700', fontSize: '18px', color: '#1e1b4b' }}>Velox</span>
+          <span style={{ fontWeight: '800', fontSize: '20px', color: '#1e1b4b' }}>Velox</span>
         </div>
 
+        {/* Tabs */}
         <div style={{
           display: 'flex', gap: '4px',
-          background: '#f5f3ff', borderRadius: '12px', padding: '4px',
+          background: 'white',
+          borderRadius: '14px', padding: '4px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
         }}>
           {(['swap', 'portfolio'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
-              padding: '8px 20px', borderRadius: '10px', border: 'none',
-              background: tab === t ? 'white' : 'transparent',
-              color: tab === t ? '#7c3aed' : '#6b7280',
-              fontWeight: tab === t ? '600' : '400',
+              padding: '9px 24px', borderRadius: '10px', border: 'none',
+              background: tab === t ? '#6d28d9' : 'transparent',
+              color: tab === t ? 'white' : '#6b7280',
+              fontWeight: '600',
               fontSize: '14px', cursor: 'pointer',
-              boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-              transition: 'all 0.15s', textTransform: 'capitalize',
+              transition: 'all 0.15s',
             }}>
-              {t === 'swap' ? 'Swap' : 'Portfolio'}
+              {t === 'swap' ? 'Trade' : 'Portfolio'}
             </button>
           ))}
         </div>
 
+        {/* Wallet */}
         <Wallet>
           <ConnectWallet>
             <Avatar className="h-6 w-6" />
@@ -124,59 +145,137 @@ function DEXApp() {
         </Wallet>
       </div>
 
-      {/* Content */}
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 24px' }}>
+      {/* Main content */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: '32px 24px',
+        gap: '16px',
+      }}>
 
         {tab === 'swap' && (
-          <div style={{ width: '100%', maxWidth: '460px' }}>
-            <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-              <h1 style={{ fontSize: '28px', fontWeight: '800', color: '#1e1b4b', margin: '0 0 6px' }}>
-                Swap Tokens
-              </h1>
-              <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
-                Best prices across all Base liquidity
-              </p>
+          <>
+            {/* Side buttons — like Jumper */}
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: '8px',
+              marginTop: '8px',
+            }}>
+              <button style={{
+                width: '48px', height: '48px', borderRadius: '14px',
+                background: 'white', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                fontSize: '18px',
+              }}>⇄</button>
+              <button style={{
+                width: '48px', height: '48px', borderRadius: '14px',
+                background: 'white', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                fontSize: '18px',
+              }}>⛽</button>
             </div>
 
+            {/* Swap card */}
             <div style={{
-              background: 'white', borderRadius: '20px', padding: '24px',
-              boxShadow: '0 4px 24px rgba(124,58,237,0.08)',
-              border: '1px solid #ede9fe',
+              width: '100%',
+              maxWidth: '440px',
+              background: 'white',
+              borderRadius: '24px',
+              padding: '24px',
+              boxShadow: '0 4px 32px rgba(109,40,217,0.10)',
             }}>
-              <Swap>
+
+              {/* Card header */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px',
+              }}>
+                <h2 style={{
+                  fontSize: '22px', fontWeight: '800',
+                  color: '#1e1b4b', margin: 0,
+                }}>Swap & Bridge</h2>
+                <button style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: '20px', color: '#6b7280',
+                }}>⚙️</button>
+              </div>
+
+              {/* OnchainKit Swap — styled via CSS overrides */}
+              <style>{`
+              [data-testid="ockSwap_Title"] {
+                display: none !important;
+              }
+                .ock-swap-container { display: flex; flex-direction: column; gap: 10px; }
+                .ock-textinput { font-size: 22px !important; font-weight: 700 !important; }
+                .ock-swap-amount-input {
+                  background: #f8f7ff !important;
+                  border-radius: 16px !important;
+                  border: 1.5px solid #ede9fe !important;
+                  padding: 14px !important;
+                }
+                .ock-swap-toggle-button {
+                  background: white !important;
+                  border: 1.5px solid #ede9fe !important;
+                  border-radius: 50% !important;
+                  width: 36px !important;
+                  height: 36px !important;
+                  margin: -6px auto !important;
+                  z-index: 2 !important;
+                  position: relative !important;
+                }
+                .ock-swap-button {
+                  background: #6d28d9 !important;
+                  border-radius: 14px !important;
+                  font-weight: 700 !important;
+                  font-size: 16px !important;
+                  padding: 14px !important;
+                  margin-top: 8px !important;
+                  width: 100% !important;
+                }
+                .ock-swap-message {
+                  font-size: 13px !important;
+                  color: #6b7280 !important;
+                  text-align: center !important;
+                  margin-top: 8px !important;
+                }
+                
+                /* Hide internal Swap header */
+                [data-testid="ockSwap_Header"],
+                .ock-swap-header,
+                div[class*="SwapHeader"],
+                div[class*="swapHeader"] {
+                  display: none !important;
+                }
+`}</style>
+
+
+
+
+              <Swap className="ock-swap-container">
                 <SwapAmountInput
                   label="Sell"
                   swappableTokens={TOKENS}
                   token={ETH}
                   type="from"
+                  className="ock-swap-amount-input"
                 />
-                <SwapToggleButton />
+                <SwapToggleButton className="ock-swap-toggle-button" />
                 <SwapAmountInput
                   label="Buy"
                   swappableTokens={TOKENS}
                   token={USDC}
                   type="to"
+                  className="ock-swap-amount-input"
                 />
-                <SwapButton />
-                <SwapMessage />
+                <SwapButton className="ock-swap-button" />
+                <SwapMessage className="ock-swap-message" />
               </Swap>
             </div>
-
-            <div style={{
-              display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '20px',
-            }}>
-              {[
-                { icon: '', label: 'Non-custodial' },
-                { icon: '', label: 'Instant settlement' },
-                { icon: '', label: 'Low fees on Base' },
-              ].map((item, i) => (
-                <div key={i} style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '18px' }}>{item.icon}</div>
-                  <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>{item.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+          </>
         )}
 
         {tab === 'portfolio' && (
@@ -191,9 +290,8 @@ function DEXApp() {
             </div>
 
             <div style={{
-              background: 'white', borderRadius: '20px', padding: '24px',
-              border: '1px solid #ede9fe',
-              boxShadow: '0 4px 24px rgba(124,58,237,0.08)',
+              background: 'white', borderRadius: '24px', padding: '24px',
+              boxShadow: '0 4px 32px rgba(109,40,217,0.10)',
             }}>
               <div style={{ textAlign: 'center', padding: '32px 0' }}>
                 <div style={{ fontSize: '40px', marginBottom: '12px' }}>📊</div>
@@ -212,13 +310,13 @@ function DEXApp() {
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '14px 0',
-                  borderTop: '1px solid #f9f7ff',
+                  borderTop: '1px solid #f5f3ff',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <img src={token.image} alt={token.symbol}
-                      style={{ width: '36px', height: '36px', borderRadius: '50%' }} />
+                      style={{ width: '38px', height: '38px', borderRadius: '50%' }} />
                     <div>
-                      <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: '0 0 2px' }}>
+                      <p style={{ fontSize: '14px', fontWeight: '700', color: '#1e1b4b', margin: '0 0 2px' }}>
                         {token.symbol}
                       </p>
                       <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>{token.name}</p>
