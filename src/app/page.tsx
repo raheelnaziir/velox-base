@@ -1,65 +1,285 @@
-import Image from "next/image";
+'use client'
+
+import dynamic from 'next/dynamic'
+import { useState, useEffect } from 'react'
+import {
+  ConnectWallet,
+  Wallet,
+  WalletDropdown,
+  WalletDropdownDisconnect,
+} from '@coinbase/onchainkit/wallet'
+import { Avatar, Name, Identity, Address } from '@coinbase/onchainkit/identity'
+import {
+  Swap,
+  SwapAmountInput,
+  SwapToggleButton,
+  SwapButton,
+  SwapMessage,
+} from '@coinbase/onchainkit/swap'
+import { useAccount } from 'wagmi'
+import { base } from 'viem/chains'
+
+const Providers = dynamic(() => import('./providers').then(m => m.default))
+
+const ETH = {
+  name: 'Ethereum',
+  address: '' as `0x${string}`,
+  symbol: 'ETH',
+  decimals: 18,
+  image: 'https://wallet-api-production.s3.amazonaws.com/uploads/tokens/eth_288.png',
+  chainId: base.id,
+}
+
+const USDC = {
+  name: 'USD Coin',
+  address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`,
+  symbol: 'USDC',
+  decimals: 6,
+  image: 'https://d3r81g40ycuhqg.cloudfront.net/tokens/images/nTEbVdiving35MoiMQ2T9kpe5wjkRUx38Gz4HoZQVS.png',
+  chainId: base.id,
+}
+
+const USDT = {
+  name: 'Tether',
+  address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2' as `0x${string}`,
+  symbol: 'USDT',
+  decimals: 6,
+  image: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+  chainId: base.id,
+}
+
+const DAI = {
+  name: 'Dai',
+  address: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb' as `0x${string}`,
+  symbol: 'DAI',
+  decimals: 18,
+  image: 'https://assets.coingecko.com/coins/images/9956/small/Badge_Dai.png',
+  chainId: base.id,
+}
+
+const TOKENS = [ETH, USDC, USDT, DAI]
+
+type Tab = 'swap' | 'portfolio'
+
+function DEXApp() {
+  const [tab, setTab] = useState<Tab>('swap')
+  const { address, isConnected } = useAccount()
+
+  useEffect(() => {
+    const initSDK = async () => {
+      const sdk = (await import('@farcaster/miniapp-sdk')).default
+      await sdk.actions.ready()
+    }
+    initSDK()
+  }, [])
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#f5f3ff', fontFamily: 'sans-serif' }}>
+
+      {/* Navbar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 32px', background: 'white',
+        borderBottom: '1px solid #ede9fe',
+        position: 'sticky', top: 0, zIndex: 10,
+      }}>
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{
+            width: '34px', height: '34px', borderRadius: '10px',
+            background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '18px',
+          }}>⚡</div>
+          <span style={{ fontWeight: '700', fontSize: '18px', color: '#1e1b4b' }}>BaseDEX</span>
+        </div>
+
+        {/* Tabs */}
+        <div style={{
+          display: 'flex', gap: '4px',
+          background: '#f5f3ff', borderRadius: '12px', padding: '4px',
+        }}>
+          {(['swap', 'portfolio'] as Tab[]).map(t => (
+            <button key={t} onClick={() => setTab(t)} style={{
+              padding: '8px 20px', borderRadius: '10px', border: 'none',
+              background: tab === t ? 'white' : 'transparent',
+              color: tab === t ? '#7c3aed' : '#6b7280',
+              fontWeight: tab === t ? '600' : '400',
+              fontSize: '14px', cursor: 'pointer',
+              boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.15s', textTransform: 'capitalize',
+            }}>
+              {t === 'swap' ? '⚡ Swap' : '📊 Portfolio'}
+            </button>
+          ))}
+        </div>
+
+        {/* Wallet */}
+        <Wallet>
+          <ConnectWallet>
+            <Avatar className="h-6 w-6" />
+            <Name />
+          </ConnectWallet>
+          <WalletDropdown>
+            <Identity className="px-4 pt-3 pb-2" hasCopyAddressOnClick>
+              <Avatar /><Name /><Address />
+            </Identity>
+            <WalletDropdownDisconnect />
+          </WalletDropdown>
+        </Wallet>
+      </div>
+
+      {/* Content */}
+      <div style={{
+        display: 'flex', justifyContent: 'center',
+        padding: '40px 24px',
+      }}>
+
+        {/* Swap Tab */}
+        {tab === 'swap' && (
+          <div style={{ width: '100%', maxWidth: '460px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+              <h1 style={{ fontSize: '28px', fontWeight: '800', color: '#1e1b4b', margin: '0 0 6px' }}>
+                Swap Tokens
+              </h1>
+              <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
+                Best prices across all Base liquidity
+              </p>
+            </div>
+
+            <div style={{
+              background: 'white', borderRadius: '20px',
+              padding: '24px',
+              boxShadow: '0 4px 24px rgba(124,58,237,0.08)',
+              border: '1px solid #ede9fe',
+            }}>
+              {isConnected ? (
+                <Swap>
+                  <SwapAmountInput
+                    label="Sell"
+                    swappableTokens={TOKENS}
+                    token={ETH}
+                    type="from"
+                  />
+                  <SwapToggleButton />
+                  <SwapAmountInput
+                    label="Buy"
+                    swappableTokens={TOKENS}
+                    token={USDC}
+                    type="to"
+                  />
+                  <SwapButton />
+                  <SwapMessage />
+                </Swap>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                  <div style={{ fontSize: '40px', marginBottom: '12px' }}>⚡</div>
+                  <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>
+                    Connect your wallet to start swapping
+                  </p>
+                  <Wallet>
+                    <ConnectWallet>
+                      <Avatar className="h-5 w-5" />
+                      <Name />
+                    </ConnectWallet>
+                  </Wallet>
+                </div>
+              )}
+            </div>
+
+            {/* Info row */}
+            <div style={{
+              display: 'flex', justifyContent: 'center', gap: '24px',
+              marginTop: '20px',
+            }}>
+              {[
+                { icon: '🔒', label: 'Non-custodial' },
+                { icon: '⚡', label: 'Instant settlement' },
+                { icon: '💸', label: 'Low fees on Base' },
+              ].map((item, i) => (
+                <div key={i} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '18px' }}>{item.icon}</div>
+                  <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>{item.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Portfolio Tab */}
+        {tab === 'portfolio' && (
+          <div style={{ width: '100%', maxWidth: '560px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+              <h1 style={{ fontSize: '28px', fontWeight: '800', color: '#1e1b4b', margin: '0 0 6px' }}>
+                Portfolio
+              </h1>
+              <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
+                Your token balances on Base
+              </p>
+            </div>
+
+            {!isConnected ? (
+              <div style={{
+                background: 'white', borderRadius: '20px', padding: '48px 24px',
+                textAlign: 'center', border: '1px solid #ede9fe',
+                boxShadow: '0 4px 24px rgba(124,58,237,0.08)',
+              }}>
+                <div style={{ fontSize: '40px', marginBottom: '12px' }}>📊</div>
+                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>
+                  Connect your wallet to view your portfolio
+                </p>
+                <Wallet>
+                  <ConnectWallet>
+                    <Avatar className="h-5 w-5" />
+                    <Name />
+                  </ConnectWallet>
+                </Wallet>
+              </div>
+            ) : (
+              <div style={{
+                background: 'white', borderRadius: '20px', padding: '24px',
+                border: '1px solid #ede9fe',
+                boxShadow: '0 4px 24px rgba(124,58,237,0.08)',
+              }}>
+                <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #f5f3ff' }}>
+                  <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Connected Wallet</p>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: 0 }}>
+                    {address?.slice(0, 6)}...{address?.slice(-4)}
+                  </p>
+                </div>
+
+                {TOKENS.map((token, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '14px 0',
+                    borderBottom: i < TOKENS.length - 1 ? '1px solid #f9f7ff' : 'none',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <img src={token.image} alt={token.symbol} style={{ width: '36px', height: '36px', borderRadius: '50%' }} />
+                      <div>
+                        <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: '0 0 2px' }}>{token.symbol}</p>
+                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>{token.name}</p>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: '0 0 2px' }}>—</p>
+                      <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Loading...</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+    <Providers>
+      <DEXApp />
+    </Providers>
+  )
 }
