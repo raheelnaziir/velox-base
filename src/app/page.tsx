@@ -1,7 +1,7 @@
 'use client'
 
-import dynamic from 'next/dynamic'
 import { useState, useEffect } from 'react'
+import Providers from './providers'
 import {
   ConnectWallet,
   Wallet,
@@ -16,10 +16,7 @@ import {
   SwapButton,
   SwapMessage,
 } from '@coinbase/onchainkit/swap'
-import { useAccount } from 'wagmi'
 import { base } from 'viem/chains'
-
-const Providers = dynamic(() => import('./providers').then(m => m.default))
 
 const ETH = {
   name: 'Ethereum',
@@ -63,12 +60,13 @@ type Tab = 'swap' | 'portfolio'
 
 function DEXApp() {
   const [tab, setTab] = useState<Tab>('swap')
-  const { address, isConnected } = useAccount()
 
   useEffect(() => {
     const initSDK = async () => {
-      const sdk = (await import('@farcaster/miniapp-sdk')).default
-      await sdk.actions.ready()
+      try {
+        const sdk = (await import('@farcaster/miniapp-sdk')).default
+        await sdk.actions.ready()
+      } catch (e) { }
     }
     initSDK()
   }, [])
@@ -83,7 +81,6 @@ function DEXApp() {
         borderBottom: '1px solid #ede9fe',
         position: 'sticky', top: 0, zIndex: 10,
       }}>
-        {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             width: '34px', height: '34px', borderRadius: '10px',
@@ -91,10 +88,9 @@ function DEXApp() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '18px',
           }}>⚡</div>
-          <span style={{ fontWeight: '700', fontSize: '18px', color: '#1e1b4b' }}>BaseDEX</span>
+          <span style={{ fontWeight: '700', fontSize: '18px', color: '#1e1b4b' }}>Velox</span>
         </div>
 
-        {/* Tabs */}
         <div style={{
           display: 'flex', gap: '4px',
           background: '#f5f3ff', borderRadius: '12px', padding: '4px',
@@ -109,12 +105,11 @@ function DEXApp() {
               boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
               transition: 'all 0.15s', textTransform: 'capitalize',
             }}>
-              {t === 'swap' ? '⚡ Swap' : '📊 Portfolio'}
+              {t === 'swap' ? 'Swap' : 'Portfolio'}
             </button>
           ))}
         </div>
 
-        {/* Wallet */}
         <Wallet>
           <ConnectWallet>
             <Avatar className="h-6 w-6" />
@@ -130,12 +125,8 @@ function DEXApp() {
       </div>
 
       {/* Content */}
-      <div style={{
-        display: 'flex', justifyContent: 'center',
-        padding: '40px 24px',
-      }}>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 24px' }}>
 
-        {/* Swap Tab */}
         {tab === 'swap' && (
           <div style={{ width: '100%', maxWidth: '460px' }}>
             <div style={{ textAlign: 'center', marginBottom: '28px' }}>
@@ -148,54 +139,36 @@ function DEXApp() {
             </div>
 
             <div style={{
-              background: 'white', borderRadius: '20px',
-              padding: '24px',
+              background: 'white', borderRadius: '20px', padding: '24px',
               boxShadow: '0 4px 24px rgba(124,58,237,0.08)',
               border: '1px solid #ede9fe',
             }}>
-              {isConnected ? (
-                <Swap>
-                  <SwapAmountInput
-                    label="Sell"
-                    swappableTokens={TOKENS}
-                    token={ETH}
-                    type="from"
-                  />
-                  <SwapToggleButton />
-                  <SwapAmountInput
-                    label="Buy"
-                    swappableTokens={TOKENS}
-                    token={USDC}
-                    type="to"
-                  />
-                  <SwapButton />
-                  <SwapMessage />
-                </Swap>
-              ) : (
-                <div style={{ textAlign: 'center', padding: '32px 0' }}>
-                  <div style={{ fontSize: '40px', marginBottom: '12px' }}>⚡</div>
-                  <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>
-                    Connect your wallet to start swapping
-                  </p>
-                  <Wallet>
-                    <ConnectWallet>
-                      <Avatar className="h-5 w-5" />
-                      <Name />
-                    </ConnectWallet>
-                  </Wallet>
-                </div>
-              )}
+              <Swap>
+                <SwapAmountInput
+                  label="Sell"
+                  swappableTokens={TOKENS}
+                  token={ETH}
+                  type="from"
+                />
+                <SwapToggleButton />
+                <SwapAmountInput
+                  label="Buy"
+                  swappableTokens={TOKENS}
+                  token={USDC}
+                  type="to"
+                />
+                <SwapButton />
+                <SwapMessage />
+              </Swap>
             </div>
 
-            {/* Info row */}
             <div style={{
-              display: 'flex', justifyContent: 'center', gap: '24px',
-              marginTop: '20px',
+              display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '20px',
             }}>
               {[
-                { icon: '🔒', label: 'Non-custodial' },
-                { icon: '⚡', label: 'Instant settlement' },
-                { icon: '💸', label: 'Low fees on Base' },
+                { icon: '', label: 'Non-custodial' },
+                { icon: '', label: 'Instant settlement' },
+                { icon: '', label: 'Low fees on Base' },
               ].map((item, i) => (
                 <div key={i} style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '18px' }}>{item.icon}</div>
@@ -206,7 +179,6 @@ function DEXApp() {
           </div>
         )}
 
-        {/* Portfolio Tab */}
         {tab === 'portfolio' && (
           <div style={{ width: '100%', maxWidth: '560px' }}>
             <div style={{ textAlign: 'center', marginBottom: '28px' }}>
@@ -218,12 +190,12 @@ function DEXApp() {
               </p>
             </div>
 
-            {!isConnected ? (
-              <div style={{
-                background: 'white', borderRadius: '20px', padding: '48px 24px',
-                textAlign: 'center', border: '1px solid #ede9fe',
-                boxShadow: '0 4px 24px rgba(124,58,237,0.08)',
-              }}>
+            <div style={{
+              background: 'white', borderRadius: '20px', padding: '24px',
+              border: '1px solid #ede9fe',
+              boxShadow: '0 4px 24px rgba(124,58,237,0.08)',
+            }}>
+              <div style={{ textAlign: 'center', padding: '32px 0' }}>
                 <div style={{ fontSize: '40px', marginBottom: '12px' }}>📊</div>
                 <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>
                   Connect your wallet to view your portfolio
@@ -235,40 +207,30 @@ function DEXApp() {
                   </ConnectWallet>
                 </Wallet>
               </div>
-            ) : (
-              <div style={{
-                background: 'white', borderRadius: '20px', padding: '24px',
-                border: '1px solid #ede9fe',
-                boxShadow: '0 4px 24px rgba(124,58,237,0.08)',
-              }}>
-                <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #f5f3ff' }}>
-                  <p style={{ fontSize: '12px', color: '#9ca3af', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Connected Wallet</p>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: 0 }}>
-                    {address?.slice(0, 6)}...{address?.slice(-4)}
-                  </p>
-                </div>
 
-                {TOKENS.map((token, i) => (
-                  <div key={i} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '14px 0',
-                    borderBottom: i < TOKENS.length - 1 ? '1px solid #f9f7ff' : 'none',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <img src={token.image} alt={token.symbol} style={{ width: '36px', height: '36px', borderRadius: '50%' }} />
-                      <div>
-                        <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: '0 0 2px' }}>{token.symbol}</p>
-                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>{token.name}</p>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: '0 0 2px' }}>—</p>
-                      <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Loading...</p>
+              {TOKENS.map((token, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '14px 0',
+                  borderTop: '1px solid #f9f7ff',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <img src={token.image} alt={token.symbol}
+                      style={{ width: '36px', height: '36px', borderRadius: '50%' }} />
+                    <div>
+                      <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: '0 0 2px' }}>
+                        {token.symbol}
+                      </p>
+                      <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>{token.name}</p>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: '0 0 2px' }}>—</p>
+                    <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Connect wallet</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
