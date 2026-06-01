@@ -108,7 +108,7 @@ function DEXApp() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '18px',
             }}>⚡</div>
-            <span style={{ fontWeight: '800', fontSize: '20px', color: '#1e1b4b' }}>BaseDEX</span>
+            <span style={{ fontWeight: '800', fontSize: '20px', color: '#1e1b4b' }}>Velox</span>
           </div>
 
           {/* Nav links */}
@@ -208,6 +208,25 @@ function DEXApp() {
               [data-testid="ockSwap_Title"] {
                 display: none !important;
               }
+
+              /* Compact input boxes */
+[data-testid="ockSwapAmountInput_Container"] {
+  min-height: unset !important;
+  height: auto !important;
+  padding: 12px 14px !important;
+}
+
+/* Hide everything below the input row */
+[data-testid="ockSwapAmountInput_Container"] > div:last-child {
+  display: none !important;
+}
+
+/* Bold Sell / Buy labels */
+[data-testid="ockSwapAmountInput_Label"] {
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  color: #1e1b4b !important;
+}
                 .ock-swap-container { display: flex; flex-direction: column; gap: 10px; }
                 .ock-textinput { font-size: 22px !important; font-weight: 700 !important; }
                 .ock-swap-amount-input {

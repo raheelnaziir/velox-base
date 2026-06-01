@@ -5,7 +5,7 @@ import './globals.css'
 const geist = Geist({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'BaseDEX — Swap tokens on Base',
+  title: 'Velox - Swap tokens on Base',
   description: 'Swap any token on Base instantly',
 }
 
