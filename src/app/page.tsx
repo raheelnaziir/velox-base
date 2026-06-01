@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Providers from './providers'
 import {
   ConnectWallet,
@@ -17,6 +17,10 @@ import {
   SwapMessage,
 } from '@coinbase/onchainkit/swap'
 import { base } from 'viem/chains'
+
+import { parseUnits, formatUnits } from 'viem'
+import { getBaseTokens, type Token } from './tokens'
+import { getSwapQuote } from './quote'
 
 const ETH = {
   name: 'Ethereum',
@@ -67,8 +71,184 @@ const TOKENS = [ETH, USDC, USDT, DAI, WETH]
 
 type Tab = 'swap' | 'portfolio'
 
+function TokenSelector({
+  selected, tokens, onSelect, label,
+}: {
+  selected: Token | null
+  tokens: Token[]
+  onSelect: (t: Token) => void
+  label: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+
+  const filtered = tokens.filter(
+    t =>
+      t.symbol.toLowerCase().includes(search.toLowerCase()) ||
+      t.name.toLowerCase().includes(search.toLowerCase())
+  ).slice(0, 50)
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{
+        background: '#f8f7ff', borderRadius: '16px',
+        border: '1.5px solid #ede9fe', padding: '14px 16px',
+      }}>
+        <div style={{
+          fontSize: '12px', fontWeight: '700', color: '#1e1b4b',
+          marginBottom: '10px', textTransform: 'uppercase' as const,
+          letterSpacing: '0.05em',
+        }}>{label}</div>
+        <button
+          onClick={() => setOpen(!open)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            background: 'white', border: '1.5px solid #ede9fe',
+            borderRadius: '12px', padding: '8px 12px',
+            cursor: 'pointer', fontWeight: '600',
+            fontSize: '14px', color: '#1e1b4b', width: '100%',
+          }}
+        >
+          {selected ? (
+            <>
+              {selected.image && (
+                <img src={selected.image} alt={selected.symbol}
+                  style={{ width: '20px', height: '20px', borderRadius: '50%' }}
+                  onError={e => (e.currentTarget.style.display = 'none')}
+                />
+              )}
+              {selected.symbol} — {selected.name.slice(0, 20)}
+            </>
+          ) : 'Select token'}
+          <span style={{ marginLeft: 'auto' }}>▾</span>
+        </button>
+      </div>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+          background: 'white', borderRadius: '16px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+          border: '1px solid #ede9fe', marginTop: '8px',
+          maxHeight: '320px', overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{ padding: '12px' }}>
+            <input
+              autoFocus
+              type="text"
+              placeholder="Search token..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{
+                width: '100%', padding: '10px 12px', borderRadius: '10px',
+                border: '1.5px solid #ede9fe', fontSize: '14px',
+                outline: 'none', boxSizing: 'border-box' as const,
+              }}
+            />
+          </div>
+          <div style={{ overflowY: 'auto' as const, flex: 1 }}>
+            {filtered.map((t, i) => (
+              <div
+                key={i}
+                onClick={() => { onSelect(t); setOpen(false); setSearch('') }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '10px 14px', cursor: 'pointer',
+                }}
+                onMouseOver={e => (e.currentTarget.style.background = '#f5f3ff')}
+                onMouseOut={e => (e.currentTarget.style.background = 'white')}
+              >
+                {t.image ? (
+                  <img src={t.image} alt={t.symbol}
+                    style={{ width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0 }}
+                    onError={e => (e.currentTarget.style.display = 'none')}
+                  />
+                ) : (
+                  <div style={{
+                    width: '28px', height: '28px', borderRadius: '50%',
+                    background: '#ede9fe', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '10px', fontWeight: '700', color: '#6d28d9',
+                  }}>{t.symbol.slice(0, 2)}</div>
+                )}
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b' }}>{t.symbol}</div>
+                  <div style={{ fontSize: '11px', color: '#9ca3af' }}>{t.name.slice(0, 24)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DEXApp() {
   const [tab, setTab] = useState<Tab>('swap')
+
+  const [tokens, setTokens] = useState<Token[]>([])
+  const [sellToken, setSellToken] = useState<Token | null>(null)
+  const [buyToken, setBuyToken] = useState<Token | null>(null)
+  const [sellAmount, setSellAmount] = useState('')
+  const [buyAmount, setBuyAmount] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [rate, setRate] = useState('')
+
+  useEffect(() => {
+    getBaseTokens().then(list => {
+      setTokens(list)
+      const eth = list.find(t => t.symbol === 'ETH') || {
+        name: 'Ethereum',
+        address: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' as `0x${string}`,
+        symbol: 'ETH', decimals: 18,
+        image: 'https://wallet-api-production.s3.amazonaws.com/uploads/tokens/eth_288.png',
+        chainId: 8453,
+      }
+      const usdc = list.find(t => t.symbol === 'USDC') || null
+      setSellToken(eth)
+      setBuyToken(usdc)
+    })
+  }, [])
+
+  const fetchQuote = useCallback(async () => {
+    if (!sellToken || !buyToken || !sellAmount || parseFloat(sellAmount) === 0) {
+      setBuyAmount('')
+      setRate('')
+      return
+    }
+    setLoading(true)
+    try {
+      const sellAmountWei = parseUnits(sellAmount, sellToken.decimals).toString()
+      const sellAddr = sellToken.symbol === 'ETH'
+        ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+        : sellToken.address
+      const buyAddr = buyToken.symbol === 'ETH'
+        ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+        : buyToken.address
+
+      const quote = await getSwapQuote({
+        sellToken: sellAddr,
+        buyToken: buyAddr,
+        sellAmount: sellAmountWei,
+      })
+
+      const buyAmt = formatUnits(BigInt(quote.buyAmount), buyToken.decimals)
+      setBuyAmount(parseFloat(buyAmt).toFixed(6))
+      const r = parseFloat(buyAmt) / parseFloat(sellAmount)
+      setRate(`1 ${sellToken.symbol} = ${r.toFixed(4)} ${buyToken.symbol}`)
+    } catch (e) {
+      setBuyAmount('—')
+      setRate('Unable to fetch quote')
+    }
+    setLoading(false)
+  }, [sellToken, buyToken, sellAmount])
+
+  useEffect(() => {
+    const t = setTimeout(fetchQuote, 600)
+    return () => clearTimeout(t)
+  }, [fetchQuote])
 
   useEffect(() => {
     const initSDK = async () => {
@@ -274,23 +454,80 @@ function DEXApp() {
 
 
               <Swap className="ock-swap-container">
-                <SwapAmountInput
-                  label="Sell"
-                  swappableTokens={TOKENS}
-                  token={ETH}
-                  type="from"
-                  className="ock-swap-amount-input"
-                />
-                <SwapToggleButton className="ock-swap-toggle-button" />
-                <SwapAmountInput
-                  label="Buy"
-                  swappableTokens={TOKENS}
-                  token={USDC}
-                  type="to"
-                  className="ock-swap-amount-input"
-                />
-                <SwapButton className="ock-swap-button" />
-                <SwapMessage className="ock-swap-message" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <TokenSelector
+                    label="Sell"
+                    selected={sellToken}
+                    tokens={tokens}
+                    onSelect={setSellToken}
+                  />
+
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <button
+                      onClick={() => {
+                        const s = sellToken
+                        setSellToken(buyToken)
+                        setBuyToken(s)
+                        setSellAmount('')
+                        setBuyAmount('')
+                      }}
+                      style={{
+                        width: '36px', height: '36px', borderRadius: '50%',
+                        background: 'white', border: '1.5px solid #ede9fe',
+                        cursor: 'pointer', fontSize: '16px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                      }}>↕</button>
+                  </div>
+
+                  <TokenSelector
+                    label="Buy"
+                    selected={buyToken}
+                    tokens={tokens}
+                    onSelect={setBuyToken}
+                  />
+
+                  <input
+                    type="number"
+                    placeholder="Enter amount to sell"
+                    value={sellAmount}
+                    onChange={e => setSellAmount(e.target.value)}
+                    style={{
+                      width: '100%', padding: '12px 14px', borderRadius: '12px',
+                      border: '1.5px solid #ede9fe', fontSize: '16px',
+                      outline: 'none', boxSizing: 'border-box' as const, color: '#1e1b4b',
+                      marginTop: '4px',
+                    }}
+                  />
+
+                  {(buyAmount || loading) && (
+                    <div style={{
+                      padding: '12px 14px', borderRadius: '12px',
+                      background: '#f5f3ff', border: '1.5px solid #ede9fe',
+                    }}>
+                      {loading ? (
+                        <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
+                          Fetching best price...
+                        </p>
+                      ) : (
+                        <>
+                          <p style={{ fontSize: '20px', fontWeight: '700', color: '#1e1b4b', margin: '0 0 4px' }}>
+                            {buyAmount} {buyToken?.symbol}
+                          </p>
+                          <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>{rate}</p>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  <button style={{
+                    width: '100%', padding: '14px', borderRadius: '14px',
+                    background: 'linear-gradient(135deg, #6d28d9, #4f46e5)',
+                    color: 'white', border: 'none', fontSize: '16px',
+                    fontWeight: '700', cursor: 'pointer', marginTop: '4px',
+                  }}>
+                    {loading ? 'Getting quote...' : `Swap ${sellToken?.symbol || ''} → ${buyToken?.symbol || ''}`}
+                  </button>
+                </div>
               </Swap>
             </div>
           </>
