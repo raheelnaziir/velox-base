@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useAccount, useWalletClient } from 'wagmi'
 import Providers from './providers'
 import {
   ConnectWallet,
@@ -9,15 +10,7 @@ import {
   WalletDropdownDisconnect,
 } from '@coinbase/onchainkit/wallet'
 import { Avatar, Name, Identity, Address } from '@coinbase/onchainkit/identity'
-import {
-  Swap,
-  SwapAmountInput,
-  SwapToggleButton,
-  SwapButton,
-  SwapMessage,
-} from '@coinbase/onchainkit/swap'
 import { base } from 'viem/chains'
-
 import { parseUnits, formatUnits } from 'viem'
 import { getBaseTokens, type Token } from './tokens'
 import { getSwapQuote } from './quote'
@@ -187,7 +180,6 @@ function TokenSelector({
 
 function DEXApp() {
   const [tab, setTab] = useState<Tab>('swap')
-
   const [tokens, setTokens] = useState<Token[]>([])
   const [sellToken, setSellToken] = useState<Token | null>(null)
   const [buyToken, setBuyToken] = useState<Token | null>(null)
@@ -195,6 +187,10 @@ function DEXApp() {
   const [buyAmount, setBuyAmount] = useState('')
   const [loading, setLoading] = useState(false)
   const [rate, setRate] = useState('')
+  const { address } = useAccount()
+  const { data: walletClient } = useWalletClient()
+  const [swapping, setSwapping] = useState(false)
+  const [txHash, setTxHash] = useState('')
 
   useEffect(() => {
     getBaseTokens().then(list => {
@@ -261,26 +257,15 @@ function DEXApp() {
   }, [])
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#f0eeff',
-      fontFamily: 'sans-serif',
-    }}>
+    <div style={{ minHeight: '100vh', background: '#f0eeff', fontFamily: 'sans-serif' }}>
 
       {/* Navbar */}
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '12px 32px',
-        background: '#f0eeff',
-        position: 'sticky',
-        top: 0,
-        zIndex: 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 32px', background: '#f0eeff',
+        position: 'sticky', top: 0, zIndex: 10,
       }}>
-        {/* Left — Logo + Nav links */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-          {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{
               width: '36px', height: '36px', borderRadius: '10px',
@@ -290,8 +275,6 @@ function DEXApp() {
             }}>⚡</div>
             <span style={{ fontWeight: '800', fontSize: '20px', color: '#1e1b4b' }}>Velox</span>
           </div>
-
-          {/* Nav links */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             {(['swap', 'portfolio'] as Tab[]).map(t => (
               <button key={t} onClick={() => setTab(t)} style={{
@@ -308,8 +291,6 @@ function DEXApp() {
             ))}
           </div>
         </div>
-
-        {/* Right — Wallet */}
         <Wallet>
           <ConnectWallet>
             <Avatar className="h-6 w-6" />
@@ -326,209 +307,199 @@ function DEXApp() {
 
       {/* Main content */}
       <div style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'center',
-        padding: '32px 24px',
-        gap: '16px',
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+        padding: '32px 24px', gap: '16px',
       }}>
 
         {tab === 'swap' && (
           <>
-            {/* Side buttons — like Jumper */}
-            <div style={{
-              display: 'flex', flexDirection: 'column', gap: '8px',
-              marginTop: '8px',
-            }}>
+            {/* Side buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
               <button style={{
                 width: '48px', height: '48px', borderRadius: '14px',
                 background: 'white', border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                fontSize: '18px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)', fontSize: '18px',
               }}>⇄</button>
               <button style={{
                 width: '48px', height: '48px', borderRadius: '14px',
                 background: 'white', border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                fontSize: '18px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)', fontSize: '18px',
               }}>⛽</button>
             </div>
 
             {/* Swap card */}
             <div style={{
-              width: '100%',
-              maxWidth: '440px',
-              background: 'white',
-              borderRadius: '24px',
-              padding: '24px',
+              width: '100%', maxWidth: '440px', background: 'white',
+              borderRadius: '24px', padding: '24px',
               boxShadow: '0 4px 32px rgba(109,40,217,0.10)',
             }}>
-
-              {/* Card header */}
               <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '20px',
+                display: 'flex', justifyContent: 'space-between',
+                alignItems: 'center', marginBottom: '20px',
               }}>
-                <h2 style={{
-                  fontSize: '22px', fontWeight: '800',
-                  color: '#1e1b4b', margin: 0,
-                }}>Swap & Bridge</h2>
-                <button style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: '20px', color: '#6b7280',
-                }}>⚙️</button>
+                <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1e1b4b', margin: 0 }}>
+                  Swap & Bridge
+                </h2>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px' }}>⚙️</button>
               </div>
 
-              {/* OnchainKit Swap — styled via CSS overrides */}
               <style>{`
-              [data-testid="ockSwap_Title"] {
-                display: none !important;
-              }
-
-              /* Compact input boxes */
-[data-testid="ockSwapAmountInput_Container"] {
-  min-height: unset !important;
-  height: auto !important;
-  padding: 12px 14px !important;
-}
-
-/* Hide everything below the input row */
-[data-testid="ockSwapAmountInput_Container"] > div:last-child {
-  display: none !important;
-}
-
-/* Bold Sell / Buy labels */
-[data-testid="ockSwapAmountInput_Label"] {
-  font-weight: 700 !important;
-  font-size: 13px !important;
-  color: #1e1b4b !important;
-}
+                [data-testid="ockSwap_Title"] { display: none !important; }
+                [data-testid="ockSwapAmountInput_Container"] { min-height: unset !important; height: auto !important; padding: 12px 14px !important; }
+                [data-testid="ockSwapAmountInput_Container"] > div:last-child { display: none !important; }
+                [data-testid="ockSwapAmountInput_Label"] { font-weight: 700 !important; font-size: 13px !important; color: #1e1b4b !important; }
                 .ock-swap-container { display: flex; flex-direction: column; gap: 10px; }
-                .ock-textinput { font-size: 22px !important; font-weight: 700 !important; }
-                .ock-swap-amount-input {
-                  background: #f8f7ff !important;
-                  border-radius: 16px !important;
-                  border: 1.5px solid #ede9fe !important;
-                  padding: 14px !important;
-                }
-                .ock-swap-toggle-button {
-                  background: white !important;
-                  border: 1.5px solid #ede9fe !important;
-                  border-radius: 50% !important;
-                  width: 36px !important;
-                  height: 36px !important;
-                  margin: -6px auto !important;
-                  z-index: 2 !important;
-                  position: relative !important;
-                }
-                .ock-swap-button {
-                  background: #6d28d9 !important;
-                  border-radius: 14px !important;
-                  font-weight: 700 !important;
-                  font-size: 16px !important;
-                  padding: 14px !important;
-                  margin-top: 8px !important;
-                  width: 100% !important;
-                }
-                .ock-swap-message {
-                  font-size: 13px !important;
-                  color: #6b7280 !important;
-                  text-align: center !important;
-                  margin-top: 8px !important;
-                }
-                
-                /* Hide internal Swap header */
-                [data-testid="ockSwap_Header"],
-                .ock-swap-header,
-                div[class*="SwapHeader"],
-                div[class*="swapHeader"] {
-                  display: none !important;
-                }
-`}</style>
+                .ock-swap-amount-input { background: #f8f7ff !important; border-radius: 16px !important; border: 1.5px solid #ede9fe !important; padding: 14px !important; }
+                .ock-swap-toggle-button { background: white !important; border: 1.5px solid #ede9fe !important; border-radius: 50% !important; width: 36px !important; height: 36px !important; margin: -6px auto !important; z-index: 2 !important; position: relative !important; }
+                .ock-swap-button { background: #6d28d9 !important; border-radius: 14px !important; font-weight: 700 !important; font-size: 16px !important; padding: 14px !important; margin-top: 8px !important; width: 100% !important; }
+                .ock-swap-message { font-size: 13px !important; color: #6b7280 !important; text-align: center !important; margin-top: 8px !important; }
+                [data-testid="ockSwap_Header"], .ock-swap-header, div[class*="SwapHeader"], div[class*="swapHeader"] { display: none !important; }
+              `}</style>
 
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <TokenSelector
+                  label="Sell"
+                  selected={sellToken}
+                  tokens={tokens}
+                  onSelect={setSellToken}
+                />
 
-
-
-              <Swap className="ock-swap-container">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <TokenSelector
-                    label="Sell"
-                    selected={sellToken}
-                    tokens={tokens}
-                    onSelect={setSellToken}
-                  />
-
-                  <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <button
-                      onClick={() => {
-                        const s = sellToken
-                        setSellToken(buyToken)
-                        setBuyToken(s)
-                        setSellAmount('')
-                        setBuyAmount('')
-                      }}
-                      style={{
-                        width: '36px', height: '36px', borderRadius: '50%',
-                        background: 'white', border: '1.5px solid #ede9fe',
-                        cursor: 'pointer', fontSize: '16px',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                      }}>↕</button>
-                  </div>
-
-                  <TokenSelector
-                    label="Buy"
-                    selected={buyToken}
-                    tokens={tokens}
-                    onSelect={setBuyToken}
-                  />
-
-                  <input
-                    type="number"
-                    placeholder="Enter amount to sell"
-                    value={sellAmount}
-                    onChange={e => setSellAmount(e.target.value)}
-                    style={{
-                      width: '100%', padding: '12px 14px', borderRadius: '12px',
-                      border: '1.5px solid #ede9fe', fontSize: '16px',
-                      outline: 'none', boxSizing: 'border-box' as const, color: '#1e1b4b',
-                      marginTop: '4px',
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <button
+                    onClick={() => {
+                      const s = sellToken
+                      setSellToken(buyToken)
+                      setBuyToken(s)
+                      setSellAmount('')
+                      setBuyAmount('')
                     }}
-                  />
-
-                  {(buyAmount || loading) && (
-                    <div style={{
-                      padding: '12px 14px', borderRadius: '12px',
-                      background: '#f5f3ff', border: '1.5px solid #ede9fe',
-                    }}>
-                      {loading ? (
-                        <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
-                          Fetching best price...
-                        </p>
-                      ) : (
-                        <>
-                          <p style={{ fontSize: '20px', fontWeight: '700', color: '#1e1b4b', margin: '0 0 4px' }}>
-                            {buyAmount} {buyToken?.symbol}
-                          </p>
-                          <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>{rate}</p>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  <button style={{
-                    width: '100%', padding: '14px', borderRadius: '14px',
-                    background: 'linear-gradient(135deg, #6d28d9, #4f46e5)',
-                    color: 'white', border: 'none', fontSize: '16px',
-                    fontWeight: '700', cursor: 'pointer', marginTop: '4px',
-                  }}>
-                    {loading ? 'Getting quote...' : `Swap ${sellToken?.symbol || ''} → ${buyToken?.symbol || ''}`}
-                  </button>
+                    style={{
+                      width: '36px', height: '36px', borderRadius: '50%',
+                      background: 'white', border: '1.5px solid #ede9fe',
+                      cursor: 'pointer', fontSize: '16px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    }}>↕</button>
                 </div>
-              </Swap>
+
+                <TokenSelector
+                  label="Buy"
+                  selected={buyToken}
+                  tokens={tokens}
+                  onSelect={setBuyToken}
+                />
+
+                <input
+                  type="number"
+                  placeholder="Enter amount to sell"
+                  value={sellAmount}
+                  onChange={e => setSellAmount(e.target.value)}
+                  style={{
+                    width: '100%', padding: '12px 14px', borderRadius: '12px',
+                    border: '1.5px solid #ede9fe', fontSize: '16px',
+                    outline: 'none', boxSizing: 'border-box' as const, color: '#1e1b4b',
+                    marginTop: '4px',
+                  }}
+                />
+
+                {(buyAmount || loading) && (
+                  <div style={{
+                    padding: '12px 14px', borderRadius: '12px',
+                    background: '#f5f3ff', border: '1.5px solid #ede9fe',
+                  }}>
+                    {loading ? (
+                      <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
+                        Fetching best price...
+                      </p>
+                    ) : (
+                      <>
+                        <p style={{ fontSize: '20px', fontWeight: '700', color: '#1e1b4b', margin: '0 0 4px' }}>
+                          {buyAmount} {buyToken?.symbol}
+                        </p>
+                        <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>{rate}</p>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Swap button — fully wired */}
+                <button
+                  onClick={async () => {
+                    if (!address || !walletClient || !sellToken || !buyToken || !sellAmount) return
+                    setSwapping(true)
+                    try {
+                      const sellAmountWei = parseUnits(sellAmount, sellToken.decimals).toString()
+                      const sellAddr = sellToken.symbol === 'ETH'
+                        ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+                        : sellToken.address
+                      const buyAddr = buyToken.symbol === 'ETH'
+                        ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+                        : buyToken.address
+
+                      const quote = await getSwapQuote({
+                        sellToken: sellAddr,
+                        buyToken: buyAddr,
+                        sellAmount: sellAmountWei,
+                        taker: address,
+                      })
+
+                      if (!quote.transaction) {
+                        alert('Could not get swap transaction. Try again.')
+                        setSwapping(false)
+                        return
+                      }
+
+                      const hash = await walletClient.sendTransaction({
+                        to: quote.transaction.to,
+                        data: quote.transaction.data,
+                        value: quote.transaction.value ? BigInt(quote.transaction.value) : undefined,
+                        gas: quote.transaction.gas ? BigInt(quote.transaction.gas) : undefined,
+                      })
+
+                      setTxHash(hash)
+                    } catch (e: any) {
+                      console.error(e)
+                      alert(e.message || 'Swap failed')
+                    }
+                    setSwapping(false)
+                  }}
+                  disabled={!address || !sellAmount || !sellToken || !buyToken || swapping}
+                  style={{
+                    width: '100%', padding: '14px', borderRadius: '14px',
+                    background: !address ? '#e5e7eb' : 'linear-gradient(135deg, #6d28d9, #4f46e5)',
+                    color: !address ? '#9ca3af' : 'white',
+                    border: 'none', fontSize: '16px',
+                    fontWeight: '700', cursor: !address ? 'not-allowed' : 'pointer',
+                    marginTop: '4px', transition: 'opacity 0.15s',
+                  }}
+                >
+                  {!address
+                    ? 'Connect wallet to swap'
+                    : swapping
+                      ? 'Swapping...'
+                      : loading
+                        ? 'Getting quote...'
+                        : `Swap ${sellToken?.symbol || ''} → ${buyToken?.symbol || ''}`}
+                </button>
+
+                {txHash && (
+                  <div style={{
+                    padding: '12px 14px', borderRadius: '12px',
+                    background: '#f0fdf4', border: '1px solid #86efac',
+                    marginTop: '8px',
+                  }}>
+                    <p style={{ fontSize: '13px', color: '#15803d', margin: '0 0 4px', fontWeight: '600' }}>
+                      ✅ Swap successful!
+                    </p>
+
+                    <a href={'https://basescan.org/tx/' + txHash} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#16a34a' }}>
+                      View on Basescan →
+                    </a>
+                  </div>
+                )}
+
+              </div>
             </div>
           </>
         )}
@@ -564,8 +535,7 @@ function DEXApp() {
               {TOKENS.map((token, i) => (
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '14px 0',
-                  borderTop: '1px solid #f5f3ff',
+                  padding: '14px 0', borderTop: '1px solid #f5f3ff',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <img src={token.image} alt={token.symbol}
@@ -587,7 +557,7 @@ function DEXApp() {
           </div>
         )}
       </div>
-    </div>
+    </div >
   )
 }
 
