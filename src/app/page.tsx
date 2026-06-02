@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useAccount, useWalletClient } from 'wagmi'
 import Providers from './providers'
 import {
   ConnectWallet,
@@ -187,8 +186,13 @@ function DEXApp() {
   const [buyAmount, setBuyAmount] = useState('')
   const [loading, setLoading] = useState(false)
   const [rate, setRate] = useState('')
-  const { address } = useAccount()
-  const { data: walletClient } = useWalletClient()
+  const [address, setAddress] = useState<string>('')
+
+  useEffect(() => {
+    const stored = localStorage.getItem('connectedAddress')
+    if (stored) setAddress(stored)
+  }, [])
+
   const [swapping, setSwapping] = useState(false)
   const [txHash, setTxHash] = useState('')
 
@@ -426,7 +430,10 @@ function DEXApp() {
                 {/* Swap button — fully wired */}
                 <button
                   onClick={async () => {
-                    if (!address || !walletClient || !sellToken || !buyToken || !sellAmount) return
+                    if (!address || !sellToken || !buyToken || !sellAmount) {
+                      alert('Please connect your wallet and enter an amount')
+                      return
+                    }
                     setSwapping(true)
                     try {
                       const sellAmountWei = parseUnits(sellAmount, sellToken.decimals).toString()
@@ -450,14 +457,33 @@ function DEXApp() {
                         return
                       }
 
-                      const hash = await walletClient.sendTransaction({
-                        to: quote.transaction.to,
-                        data: quote.transaction.data,
-                        value: quote.transaction.value ? BigInt(quote.transaction.value) : undefined,
-                        gas: quote.transaction.gas ? BigInt(quote.transaction.gas) : undefined,
+                      // Use window.ethereum to send transaction
+                      const ethereum = (window as any).ethereum
+                      if (!ethereum) {
+                        alert('No wallet found. Please install MetaMask or Coinbase Wallet.')
+                        setSwapping(false)
+                        return
+                      }
+
+                      const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
+                      const from = accounts[0]
+
+                      const txHash = await ethereum.request({
+                        method: 'eth_sendTransaction',
+                        params: [{
+                          from,
+                          to: quote.transaction.to,
+                          data: quote.transaction.data,
+                          value: quote.transaction.value
+                            ? '0x' + BigInt(quote.transaction.value).toString(16)
+                            : '0x0',
+                          gas: quote.transaction.gas
+                            ? '0x' + BigInt(quote.transaction.gas).toString(16)
+                            : undefined,
+                        }],
                       })
 
-                      setTxHash(hash)
+                      setTxHash(txHash)
                     } catch (e: any) {
                       console.error(e)
                       alert(e.message || 'Swap failed')
