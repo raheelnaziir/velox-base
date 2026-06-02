@@ -9,9 +9,7 @@ export interface Token {
 
 export async function getBaseTokens(): Promise<Token[]> {
     try {
-        const res = await fetch(
-            'https://tokens.coingecko.com/base/all.json'
-        )
+        const res = await fetch('/api/tokens')
         const data = await res.json()
         return data.tokens.map((t: any) => ({
             name: t.name,
@@ -21,7 +19,8 @@ export async function getBaseTokens(): Promise<Token[]> {
             image: t.logoURI || '',
             chainId: 8453,
         }))
-    } catch {
+    } catch (e) {
+        console.error('Failed to fetch tokens:', e)
         return []
     }
 }
