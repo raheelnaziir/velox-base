@@ -397,7 +397,7 @@ function DEXApp() {
 
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '12px', color: '#8b8fa8' }}>
-                      {sellAmount ? `~$${(parseFloat(sellAmount) * 2000).toFixed(2)}` : '$0.00'}
+                      {sellAmount && rate ? `~$${(parseFloat(sellAmount) * (parseFloat(buyAmount) / parseFloat(sellAmount))).toFixed(2)}` : '$0.00'}
                     </span>
                     <span style={{ fontSize: '12px', color: '#8b8fa8' }}>Balance: —</span>
                   </div>
