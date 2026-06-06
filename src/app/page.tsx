@@ -63,120 +63,6 @@ const TOKENS = [ETH, USDC, USDT, DAI, WETH]
 
 type Tab = 'swap' | 'portfolio'
 
-function TokenSelector({
-  selected, tokens, onSelect, label,
-}: {
-  selected: Token | null
-  tokens: Token[]
-  onSelect: (t: Token) => void
-  label: string
-}) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-
-  const filtered = tokens.filter(
-    t =>
-      t.symbol.toLowerCase().includes(search.toLowerCase()) ||
-      t.name.toLowerCase().includes(search.toLowerCase())
-  ).slice(0, 50)
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <div style={{
-        background: '#f8f7ff', borderRadius: '16px',
-        border: '1.5px solid #ede9fe', padding: '14px 16px',
-      }}>
-        <div style={{
-          fontSize: '12px', fontWeight: '700', color: '#1e1b4b',
-          marginBottom: '10px', textTransform: 'uppercase' as const,
-          letterSpacing: '0.05em',
-        }}>{label}</div>
-        <button
-          onClick={() => setOpen(!open)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            background: 'white', border: '1.5px solid #ede9fe',
-            borderRadius: '12px', padding: '8px 12px',
-            cursor: 'pointer', fontWeight: '600',
-            fontSize: '14px', color: '#1e1b4b', width: '100%',
-          }}
-        >
-          {selected ? (
-            <>
-              {selected.image && (
-                <img src={selected.image} alt={selected.symbol}
-                  style={{ width: '20px', height: '20px', borderRadius: '50%' }}
-                  onError={e => (e.currentTarget.style.display = 'none')}
-                />
-              )}
-              {selected.symbol} — {selected.name.slice(0, 20)}
-            </>
-          ) : 'Select token'}
-          <span style={{ marginLeft: 'auto' }}>▾</span>
-        </button>
-      </div>
-
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-          background: 'white', borderRadius: '16px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
-          border: '1px solid #ede9fe', marginTop: '8px',
-          maxHeight: '320px', overflow: 'hidden',
-          display: 'flex', flexDirection: 'column',
-        }}>
-          <div style={{ padding: '12px' }}>
-            <input
-              autoFocus
-              type="text"
-              placeholder="Search token..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{
-                width: '100%', padding: '10px 12px', borderRadius: '10px',
-                border: '1.5px solid #ede9fe', fontSize: '14px',
-                outline: 'none', boxSizing: 'border-box' as const,
-              }}
-            />
-          </div>
-          <div style={{ overflowY: 'auto' as const, flex: 1 }}>
-            {filtered.map((t, i) => (
-              <div
-                key={i}
-                onClick={() => { onSelect(t); setOpen(false); setSearch('') }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '10px',
-                  padding: '10px 14px', cursor: 'pointer',
-                }}
-                onMouseOver={e => (e.currentTarget.style.background = '#f5f3ff')}
-                onMouseOut={e => (e.currentTarget.style.background = 'white')}
-              >
-                {t.image ? (
-                  <img src={t.image} alt={t.symbol}
-                    style={{ width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0 }}
-                    onError={e => (e.currentTarget.style.display = 'none')}
-                  />
-                ) : (
-                  <div style={{
-                    width: '28px', height: '28px', borderRadius: '50%',
-                    background: '#ede9fe', flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '10px', fontWeight: '700', color: '#6d28d9',
-                  }}>{t.symbol.slice(0, 2)}</div>
-                )}
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b' }}>{t.symbol}</div>
-                  <div style={{ fontSize: '11px', color: '#9ca3af' }}>{t.name.slice(0, 24)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 function DEXApp() {
   const [tab, setTab] = useState<Tab>('swap')
   const [tokens, setTokens] = useState<Token[]>([])
@@ -187,14 +73,17 @@ function DEXApp() {
   const [loading, setLoading] = useState(false)
   const [rate, setRate] = useState('')
   const [address, setAddress] = useState<string>('')
+  const [swapping, setSwapping] = useState(false)
+  const [txHash, setTxHash] = useState('')
+  const [open1, setOpen1] = useState(false)
+  const [open2, setOpen2] = useState(false)
+  const [search1, setSearch1] = useState('')
+  const [search2, setSearch2] = useState('')
 
   useEffect(() => {
     const stored = localStorage.getItem('connectedAddress')
     if (stored) setAddress(stored)
   }, [])
-
-  const [swapping, setSwapping] = useState(false)
-  const [txHash, setTxHash] = useState('')
 
   useEffect(() => {
     getBaseTokens().then(list => {
@@ -260,10 +149,71 @@ function DEXApp() {
     initSDK()
   }, [])
 
+  const handleSwap = async () => {
+    if (!sellToken || !buyToken || !sellAmount) {
+      alert('Please fill in all fields')
+      return
+    }
+    setSwapping(true)
+    try {
+      const sellAmountWei = parseUnits(sellAmount, sellToken.decimals).toString()
+      const sellAddr = sellToken.symbol === 'ETH'
+        ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+        : sellToken.address
+      const buyAddr = buyToken.symbol === 'ETH'
+        ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+        : buyToken.address
+
+      const quote = await getSwapQuote({
+        sellToken: sellAddr,
+        buyToken: buyAddr,
+        sellAmount: sellAmountWei,
+        taker: address,
+      })
+
+      if (!quote.transaction) {
+        alert('Could not get swap transaction. Try again.')
+        setSwapping(false)
+        return
+      }
+
+      const ethereum = (window as any).ethereum
+      if (!ethereum) {
+        alert('No wallet found. Please install MetaMask or Coinbase Wallet.')
+        setSwapping(false)
+        return
+      }
+
+      const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
+      const from = accounts[0]
+
+      const hash = await ethereum.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from,
+          to: quote.transaction.to,
+          data: quote.transaction.data,
+          value: quote.transaction.value
+            ? '0x' + BigInt(quote.transaction.value).toString(16)
+            : '0x0',
+          gas: quote.transaction.gas
+            ? '0x' + BigInt(quote.transaction.gas).toString(16)
+            : undefined,
+        }],
+      })
+
+      setTxHash(hash)
+    } catch (e: any) {
+      console.error(e)
+      alert(e.message || 'Swap failed')
+    }
+    setSwapping(false)
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: '#f0eeff', fontFamily: 'sans-serif' }}>
 
-      {/* Navbar */}
+      {/* Navbar — unchanged */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '12px 32px', background: '#f0eeff',
@@ -317,7 +267,7 @@ function DEXApp() {
 
         {tab === 'swap' && (
           <>
-            {/* Side buttons */}
+            {/* Side buttons — unchanged */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
               <button style={{
                 width: '48px', height: '48px', borderRadius: '14px',
@@ -333,193 +283,271 @@ function DEXApp() {
               }}>⛽</button>
             </div>
 
-            {/* Swap card */}
+            {/* Swap card — dark UI */}
             <div style={{
-              width: '100%', maxWidth: '440px', background: 'white',
-              borderRadius: '24px', padding: '24px',
-              boxShadow: '0 4px 32px rgba(109,40,217,0.10)',
+              width: '100%', maxWidth: '440px',
+              background: '#f0eeff', borderRadius: '24px', padding: '20px',
+              boxShadow: '0 4px 32px rgba(0,0,0,0.3)',
+              position: 'relative',
             }}>
+
+              {/* Card header */}
               <div style={{
                 display: 'flex', justifyContent: 'space-between',
-                alignItems: 'center', marginBottom: '20px',
+                alignItems: 'center', marginBottom: '16px',
               }}>
-                <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1e1b4b', margin: 0 }}>
+
+                <b><h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1e1b4b', margin: 0 }}>
                   Swap & Bridge
-                </h2>
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px' }}>⚙️</button>
+                </h2></b>
+
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' }}></button>
               </div>
 
-              <style>{`
-                [data-testid="ockSwap_Title"] { display: none !important; }
-                [data-testid="ockSwapAmountInput_Container"] { min-height: unset !important; height: auto !important; padding: 12px 14px !important; }
-                [data-testid="ockSwapAmountInput_Container"] > div:last-child { display: none !important; }
-                [data-testid="ockSwapAmountInput_Label"] { font-weight: 700 !important; font-size: 13px !important; color: #1e1b4b !important; }
-                .ock-swap-container { display: flex; flex-direction: column; gap: 10px; }
-                .ock-swap-amount-input { background: #f8f7ff !important; border-radius: 16px !important; border: 1.5px solid #ede9fe !important; padding: 14px !important; }
-                .ock-swap-toggle-button { background: white !important; border: 1.5px solid #ede9fe !important; border-radius: 50% !important; width: 36px !important; height: 36px !important; margin: -6px auto !important; z-index: 2 !important; position: relative !important; }
-                .ock-swap-button { background: #6d28d9 !important; border-radius: 14px !important; font-weight: 700 !important; font-size: 16px !important; padding: 14px !important; margin-top: 8px !important; width: 100% !important; }
-                .ock-swap-message { font-size: 13px !important; color: #6b7280 !important; text-align: center !important; margin-top: 8px !important; }
-                [data-testid="ockSwap_Header"], .ock-swap-header, div[class*="SwapHeader"], div[class*="swapHeader"] { display: none !important; }
-              `}</style>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <TokenSelector
-                  label="Sell"
-                  selected={sellToken}
-                  tokens={tokens}
-                  onSelect={setSellToken}
-                />
+                {/* Sell box */}
+                <div style={{ background: '#e8e4ff', borderRadius: '16px', padding: '16px', position: 'relative' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '13px', color: '#12131f', fontWeight: '600' }}><b>Sell</b></span>
+                    <button
+                      onClick={() => { setOpen1(!open1); setOpen2(false) }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        background: 'white', border: '1px solid #ede9fe',
+                        borderRadius: '20px', padding: '6px 12px',
+                        cursor: 'pointer', color: 'white', fontWeight: '600', fontSize: '14px',
+                      }}
+                    >
+                      {sellToken?.image && (
+                        <img src={sellToken.image} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%' }}
+                          onError={e => (e.currentTarget.style.display = 'none')} />
+                      )}
+                      {sellToken?.symbol || 'Select'}
+                      <span style={{ fontSize: '10px', color: '#6b7280' }}>▼</span>
+                    </button>
+                  </div>
 
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={sellAmount}
+                    onChange={e => setSellAmount(e.target.value)}
+                    style={{
+                      background: 'transparent', border: 'none', outline: 'none',
+                      fontSize: '36px', fontWeight: '700', color: '#1e1b4b',
+                      width: '100%', marginBottom: '10px',
+                    }}
+                  />
+
+                  {/* % shortcuts */}
+                  <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                    {['10%', '25%', '50%', 'Max'].map(p => (
+                      <button key={p}
+                        onClick={() => {
+                          if (p === 'Max') setSellAmount('1')
+                          else setSellAmount((parseFloat(p) / 100).toFixed(4))
+                        }}
+                        style={{
+                          padding: '3px 8px', borderRadius: '6px', fontSize: '11px',
+                          background: '#1e2035', border: '1px solid #2d2f4a',
+                          color: '#8b8fa8', cursor: 'pointer', fontWeight: '500',
+                        }}
+                      >{p}</button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '12px', color: '#8b8fa8' }}>
+                      {sellAmount ? `~$${(parseFloat(sellAmount) * 2000).toFixed(2)}` : '$0.00'}
+                    </span>
+                    <span style={{ fontSize: '12px', color: '#8b8fa8' }}>Balance: —</span>
+                  </div>
+
+                  {/* Sell dropdown */}
+                  {open1 && (
+                    <div style={{
+                      position: 'absolute', top: '40px', right: 0, left: 'auto', zIndex: 200, width: '300px',
+                      background: '#ede9fe', borderRadius: '16px',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                      border: '1px solid #ede9fe',
+                      maxHeight: '320px', overflow: 'hidden',
+                      display: 'flex', flexDirection: 'column', marginTop: '8px',
+                    }}>
+                      <div style={{ padding: '12px' }}>
+                        <input autoFocus type="text" placeholder="Search token..."
+                          value={search2} onChange={e => setSearch2(e.target.value)}
+                          style={{
+                            width: '100%', padding: '10px 12px', borderRadius: '10px',
+                            background: '#f5f3ff', border: '1px solid #ede9fe',
+                            color: '#1e1b4b', fontSize: '14px', outline: 'none',
+                            boxSizing: 'border-box' as const,
+                          }} />
+                      </div>
+                      <div style={{ overflowY: 'auto' as const, flex: 1 }}>
+                        {tokens.filter(t =>
+                          t.symbol.toLowerCase().includes(search1.toLowerCase()) ||
+                          t.name.toLowerCase().includes(search1.toLowerCase())
+                        ).slice(0, 50).map((t, i) => (
+                          <div key={i}
+                            onClick={() => { setSellToken(t); setOpen1(false); setSearch1('') }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '10px',
+                              padding: '10px 14px', cursor: 'pointer', color: '#1e1b4b',
+                            }}
+                            onMouseOver={e => (e.currentTarget.style.background = '#ede9fe')}
+                            onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            {t.image ? (
+                              <img src={t.image} alt="" style={{ width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0 }}
+                                onError={e => (e.currentTarget.style.display = 'none')} />
+                            ) : (
+                              <div style={{
+                                width: '28px', height: '28px', borderRadius: '50%', background: '#2d2f4a',
+                                flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '10px', fontWeight: '700', color: '#8b8fa8',
+                              }}>{t.symbol.slice(0, 2)}</div>
+                            )}
+                            <div>
+                              <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b' }}>{t.symbol}</div>
+                              <div style={{ fontSize: '11px', color: '#6b7280' }}>{t.name.slice(0, 24)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Toggle button */}
+                <div style={{ display: 'flex', justifyContent: 'center', margin: '-2px 0', zIndex: 1 }}>
                   <button
                     onClick={() => {
-                      const s = sellToken
-                      setSellToken(buyToken)
-                      setBuyToken(s)
-                      setSellAmount('')
-                      setBuyAmount('')
+                      const s = sellToken; setSellToken(buyToken); setBuyToken(s)
+                      setSellAmount(''); setBuyAmount('')
                     }}
                     style={{
                       width: '36px', height: '36px', borderRadius: '50%',
-                      background: 'white', border: '1.5px solid #ede9fe',
-                      cursor: 'pointer', fontSize: '16px',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                    }}>↕</button>
+                      background: '#1a1b2e', border: '2px solid #2d2f4a',
+                      cursor: 'pointer', color: 'white', fontSize: '16px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>↓</button>
                 </div>
 
-                <TokenSelector
-                  label="Buy"
-                  selected={buyToken}
-                  tokens={tokens}
-                  onSelect={setBuyToken}
-                />
-
-                <input
-                  type="number"
-                  placeholder="Enter amount to sell"
-                  value={sellAmount}
-                  onChange={e => setSellAmount(e.target.value)}
-                  style={{
-                    width: '100%', padding: '12px 14px', borderRadius: '12px',
-                    border: '1.5px solid #ede9fe', fontSize: '16px',
-                    outline: 'none', boxSizing: 'border-box' as const, color: '#1e1b4b',
-                    marginTop: '4px',
-                  }}
-                />
-
-                {(buyAmount || loading) && (
-                  <div style={{
-                    padding: '12px 14px', borderRadius: '12px',
-                    background: '#f5f3ff', border: '1.5px solid #ede9fe',
-                  }}>
-                    {loading ? (
-                      <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
-                        Fetching best price...
-                      </p>
-                    ) : (
-                      <>
-                        <p style={{ fontSize: '20px', fontWeight: '700', color: '#1e1b4b', margin: '0 0 4px' }}>
-                          {buyAmount} {buyToken?.symbol}
-                        </p>
-                        <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>{rate}</p>
-                      </>
-                    )}
+                {/* Buy box */}
+                <div style={{ background: '#e8e4ff', borderRadius: '16px', padding: '16px', position: 'relative' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '13px', color: '#12131f', fontWeight: '600' }}><b>Buy</b></span>
+                    <button
+                      onClick={() => { setOpen2(!open2); setOpen1(false) }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        background: 'white', border: '1px solid #ede9fe',
+                        borderRadius: '20px', padding: '6px 12px',
+                        cursor: 'pointer', color: '#1e1b4b', fontWeight: '600', fontSize: '14px',
+                      }}
+                    >
+                      {buyToken?.image && (
+                        <img src={buyToken.image} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%' }}
+                          onError={e => (e.currentTarget.style.display = 'none')} />
+                      )}
+                      {buyToken?.symbol || 'Select'}
+                      <span style={{ fontSize: '10px', color: '#8b8fa8' }}>▼</span>
+                    </button>
                   </div>
-                )}
 
-                {/* Swap button — fully wired */}
+                  <div style={{ fontSize: '36px', fontWeight: '700', color: loading ? '#6b7280' : '#1e1b4b', marginBottom: '8px' }}>
+                    {loading ? 'Loading...' : (buyAmount || '0')}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '12px', color: '#8b8fa8' }}>
+                      {buyAmount && buyAmount !== '—' ? `~$${(parseFloat(buyAmount)).toFixed(2)}` : '$0.00'}
+                    </span>
+                    <span style={{ fontSize: '12px', color: '#4ade80' }}>{rate}</span>
+                  </div>
+
+                  {/* Buy dropdown */}
+                  {open2 && (
+                    <div style={{
+                      position: 'absolute', top: '40px', left: 'auto', right: 0, zIndex: 200, width: '300px',
+                      background: '#ede9fe', borderRadius: '16px',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                      border: '1px solid #ede9fe',
+                      maxHeight: '320px', overflow: 'hidden',
+                      display: 'flex', flexDirection: 'column', marginTop: '8px',
+                    }}>
+                      <div style={{ padding: '12px' }}>
+                        <input autoFocus type="text" placeholder="Search token..."
+                          value={search2} onChange={e => setSearch2(e.target.value)}
+                          style={{
+                            width: '100%', padding: '10px 12px', borderRadius: '10px',
+                            background: '#f5f3ff', border: '1px solid #ede9fe',
+                            color: '#1e1b4b', fontSize: '14px', outline: 'none',
+                            boxSizing: 'border-box' as const,
+                          }} />
+                      </div>
+                      <div style={{ overflowY: 'auto' as const, flex: 1 }}>
+                        {tokens.filter(t =>
+                          t.symbol.toLowerCase().includes(search2.toLowerCase()) ||
+                          t.name.toLowerCase().includes(search2.toLowerCase())
+                        ).slice(0, 50).map((t, i) => (
+                          <div key={i}
+                            onClick={() => { setBuyToken(t); setOpen2(false); setSearch2('') }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '10px',
+                              padding: '10px 14px', cursor: 'pointer', color: '#1e1b4b',
+                            }}
+                            onMouseOver={e => (e.currentTarget.style.background = '#ede9fe')}
+                            onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            {t.image ? (
+                              <img src={t.image} alt="" style={{ width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0 }}
+                                onError={e => (e.currentTarget.style.display = 'none')} />
+                            ) : (
+                              <div style={{
+                                width: '28px', height: '28px', borderRadius: '50%', background: '#2d2f4a',
+                                flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '10px', fontWeight: '700', color: '#8b8fa8',
+                              }}>{t.symbol.slice(0, 2)}</div>
+                            )}
+                            <div>
+                              <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b' }}>{t.symbol}</div>
+                              <div style={{ fontSize: '11px', color: '#6b7280' }}>{t.name.slice(0, 24)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Swap button */}
                 <button
-                  onClick={async () => {
-                    if (!address || !sellToken || !buyToken || !sellAmount) {
-                      alert('Please connect your wallet and enter an amount')
-                      return
-                    }
-                    setSwapping(true)
-                    try {
-                      const sellAmountWei = parseUnits(sellAmount, sellToken.decimals).toString()
-                      const sellAddr = sellToken.symbol === 'ETH'
-                        ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-                        : sellToken.address
-                      const buyAddr = buyToken.symbol === 'ETH'
-                        ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-                        : buyToken.address
-
-                      const quote = await getSwapQuote({
-                        sellToken: sellAddr,
-                        buyToken: buyAddr,
-                        sellAmount: sellAmountWei,
-                        taker: address,
-                      })
-
-                      if (!quote.transaction) {
-                        alert('Could not get swap transaction. Try again.')
-                        setSwapping(false)
-                        return
-                      }
-
-                      // Use window.ethereum to send transaction
-                      const ethereum = (window as any).ethereum
-                      if (!ethereum) {
-                        alert('No wallet found. Please install MetaMask or Coinbase Wallet.')
-                        setSwapping(false)
-                        return
-                      }
-
-                      const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
-                      const from = accounts[0]
-
-                      const txHash = await ethereum.request({
-                        method: 'eth_sendTransaction',
-                        params: [{
-                          from,
-                          to: quote.transaction.to,
-                          data: quote.transaction.data,
-                          value: quote.transaction.value
-                            ? '0x' + BigInt(quote.transaction.value).toString(16)
-                            : '0x0',
-                          gas: quote.transaction.gas
-                            ? '0x' + BigInt(quote.transaction.gas).toString(16)
-                            : undefined,
-                        }],
-                      })
-
-                      setTxHash(txHash)
-                    } catch (e: any) {
-                      console.error(e)
-                      alert(e.message || 'Swap failed')
-                    }
-                    setSwapping(false)
-                  }}
-                  disabled={!address || !sellAmount || !sellToken || !buyToken || swapping}
+                  onClick={handleSwap}
+                  disabled={!sellAmount || !sellToken || !buyToken || swapping}
                   style={{
-                    width: '100%', padding: '14px', borderRadius: '14px',
-                    background: !address ? '#e5e7eb' : 'linear-gradient(135deg, #6d28d9, #4f46e5)',
-                    color: !address ? '#9ca3af' : 'white',
-                    border: 'none', fontSize: '16px',
-                    fontWeight: '700', cursor: !address ? 'not-allowed' : 'pointer',
-                    marginTop: '4px', transition: 'opacity 0.15s',
+                    width: '100%', padding: '16px', borderRadius: '14px', marginTop: '8px',
+                    background: !sellAmount ? '#2d2f4a' : 'linear-gradient(90deg, #3b82f6, #6d28d9)',
+                    color: !sellAmount ? '#8b8fa8' : 'white',
+                    border: 'none', fontSize: '16px', fontWeight: '700',
+                    cursor: !sellAmount ? 'not-allowed' : 'pointer',
+                    transition: 'opacity 0.15s',
                   }}
                 >
-                  {!address
-                    ? 'Connect wallet to swap'
-                    : swapping
-                      ? 'Swapping...'
-                      : loading
-                        ? 'Getting quote...'
-                        : `Swap ${sellToken?.symbol || ''} → ${buyToken?.symbol || ''}`}
+                  {swapping ? 'Swapping...' : loading ? 'Getting quote...' : `Swap ${sellToken?.symbol || ''} → ${buyToken?.symbol || ''}`}
                 </button>
 
                 {txHash && (
                   <div style={{
                     padding: '12px 14px', borderRadius: '12px',
-                    background: '#f0fdf4', border: '1px solid #86efac',
-                    marginTop: '8px',
+                    background: '#0f2a1a', border: '1px solid #1a5c35', marginTop: '8px',
                   }}>
-                    <p style={{ fontSize: '13px', color: '#15803d', margin: '0 0 4px', fontWeight: '600' }}>
+                    <p style={{ fontSize: '13px', color: '#4ade80', margin: '0 0 4px', fontWeight: '600' }}>
                       ✅ Swap successful!
                     </p>
-
-                    <a href={'https://basescan.org/tx/' + txHash} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#16a34a' }}>
+                    <a href={'https://basescan.org/tx/' + txHash} target="_blank" rel="noopener noreferrer"
+                      style={{ fontSize: '12px', color: '#1e1b4b' }}>
                       View on Basescan →
                     </a>
                   </div>
@@ -583,7 +611,7 @@ function DEXApp() {
           </div>
         )}
       </div>
-    </div >
+    </div>
   )
 }
 
