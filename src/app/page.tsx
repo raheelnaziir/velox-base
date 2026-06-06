@@ -233,12 +233,11 @@ function DEXApp() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{
-              width: '36px', height: '36px', borderRadius: '10px',
-              background: 'linear-gradient(135deg, #6d28d9, #4f46e5)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '18px',
-            }}>⚡</div>
+            <img
+              src="/favicon.png"
+              alt="Velox"
+              style={{ width: '36px', height: '36px', borderRadius: '10px' }}
+            />
             <span style={{ fontWeight: '800', fontSize: '20px', color: '#1e1b4b' }}>Velox</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>

@@ -5,8 +5,9 @@ import './globals.css'
 const geist = Geist({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Velox - Swap tokens on Base',
+  title: 'Velox | Swap tokens on Base',
   description: 'Swap any token on Base instantly',
+  icons: { icon: '/favicon.png' },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
