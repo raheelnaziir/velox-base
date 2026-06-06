@@ -10,3 +10,37 @@
 body {
   background: #f5f3ff;
 }
+
+/* Remove number input arrows */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Connect Wallet button - not connected */
+button[data-testid="ockConnectButton"] {
+  background: #3b0764 !important;
+  border: none !important;
+  border-radius: 20px !important;
+  padding: 10px 20px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+}
+
+button[data-testid="ockConnectButton"] span {
+  color: white !important;
+  font-weight: 600 !important;
+  font-size: 15px !important;
+}
+
+button[data-testid^="ockConnectWallet"] span {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  color: #1e1b4b !important;
+}

@@ -81,8 +81,20 @@ function DEXApp() {
   const [search2, setSearch2] = useState('')
 
   useEffect(() => {
-    const stored = localStorage.getItem('connectedAddress')
-    if (stored) setAddress(stored)
+    const getAddress = async () => {
+      const ethereum = (window as any).ethereum
+      if (ethereum) {
+        const accounts = await ethereum.request({ method: 'eth_accounts' })
+        if (accounts.length > 0) setAddress(accounts[0])
+      }
+    }
+    getAddress()
+    const ethereum = (window as any).ethereum
+    if (ethereum) {
+      ethereum.on('accountsChanged', (accounts: string[]) => {
+        setAddress(accounts[0] || '')
+      })
+    }
   }, [])
 
   useEffect(() => {
@@ -245,18 +257,42 @@ function DEXApp() {
             ))}
           </div>
         </div>
-        <Wallet>
-          <ConnectWallet>
-            <Avatar className="h-6 w-6" />
-            <Name />
-          </ConnectWallet>
-          <WalletDropdown>
-            <Identity className="px-4 pt-3 pb-2" hasCopyAddressOnClick>
-              <Avatar /><Name /><Address />
-            </Identity>
-            <WalletDropdownDisconnect />
-          </WalletDropdown>
-        </Wallet>
+        {!address ? (
+          <button
+            onClick={async () => {
+              const ethereum = (window as any).ethereum
+              if (ethereum) {
+                const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
+                setAddress(accounts[0])
+              } else {
+                alert('No wallet found. Please install MetaMask or Coinbase Wallet.')
+              }
+            }}
+            style={{
+              background: '#3b0764', color: 'white', border: 'none',
+              borderRadius: '20px', padding: '10px 20px',
+              fontWeight: '600', fontSize: '16px', cursor: 'pointer',
+            }}
+          >
+            Connect
+          </button>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontWeight: '600', fontSize: '16px', color: '#1e1b4b' }}>
+              {address.slice(0, 6)}...{address.slice(-4)}
+            </span>
+            <button
+              onClick={() => setAddress('')}
+              style={{
+                background: '#ede9fe', border: 'none', borderRadius: '10px',
+                padding: '6px 12px', fontSize: '12px', color: '#6d28d9',
+                cursor: 'pointer', fontWeight: '600',
+              }}
+            >
+              Disconnect
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main content */}
@@ -333,6 +369,7 @@ function DEXApp() {
                     placeholder="0"
                     value={sellAmount}
                     onChange={e => setSellAmount(e.target.value)}
+                    onWheel={e => e.currentTarget.blur()}
                     style={{
                       background: 'transparent', border: 'none', outline: 'none',
                       fontSize: '36px', fontWeight: '700', color: '#1e1b4b',
@@ -463,7 +500,7 @@ function DEXApp() {
                     <span style={{ fontSize: '12px', color: '#8b8fa8' }}>
                       {buyAmount && buyAmount !== '—' ? `~$${(parseFloat(buyAmount)).toFixed(2)}` : '$0.00'}
                     </span>
-                    <span style={{ fontSize: '12px', color: '#4ade80' }}>{rate}</span>
+                    <span style={{ fontSize: '12px', color: rate.includes('Unable') ? '#1e1b4b' : '#1e1b4b' }}>{rate}</span>
                   </div>
 
                   {/* Buy dropdown */}
@@ -522,20 +559,49 @@ function DEXApp() {
                 </div>
 
                 {/* Swap button */}
-                <button
-                  onClick={handleSwap}
-                  disabled={!sellAmount || !sellToken || !buyToken || swapping}
-                  style={{
-                    width: '100%', padding: '16px', borderRadius: '14px', marginTop: '8px',
-                    background: !sellAmount ? '#2d2f4a' : 'linear-gradient(90deg, #3b82f6, #6d28d9)',
-                    color: !sellAmount ? '#8b8fa8' : 'white',
-                    border: 'none', fontSize: '16px', fontWeight: '700',
-                    cursor: !sellAmount ? 'not-allowed' : 'pointer',
-                    transition: 'opacity 0.15s',
-                  }}
-                >
-                  {swapping ? 'Swapping...' : loading ? 'Getting quote...' : `Swap ${sellToken?.symbol || ''} → ${buyToken?.symbol || ''}`}
-                </button>
+                {!address ? (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <button
+                      onClick={async () => {
+                        const ethereum = (window as any).ethereum
+                        if (ethereum) {
+                          const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
+                          setAddress(accounts[0])
+                        } else {
+                          alert('No wallet found. Please install MetaMask or Coinbase Wallet.')
+                        }
+                      }}
+                      style={{
+                        flex: 1, padding: '16px', borderRadius: '14px',
+                        background: '#3b0764', color: 'white',
+                        border: 'none', fontSize: '16px', fontWeight: '600',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Connect wallet
+                    </button>
+                    <button style={{
+                      width: '52px', height: '52px', borderRadius: '14px',
+                      background: '#ede9fe', border: 'none', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '20px',
+                    }}>💳</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleSwap}
+                    disabled={!sellAmount || !sellToken || !buyToken || swapping}
+                    style={{
+                      width: '100%', padding: '16px', borderRadius: '14px', marginTop: '8px',
+                      background: !sellAmount ? '#ede9fe' : '#3b0764',
+                      color: !sellAmount ? '#8b8fa8' : 'white',
+                      border: 'none', fontSize: '16px', fontWeight: '700',
+                      cursor: !sellAmount ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {swapping ? 'Swapping...' : loading ? 'Getting quote...' : `Swap ${sellToken?.symbol || ''} → ${buyToken?.symbol || ''}`}
+                  </button>
+                )}
 
                 {txHash && (
                   <div style={{
@@ -602,7 +668,7 @@ function DEXApp() {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: '0 0 2px' }}>—</p>
-                    <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Connect wallet</p>
+                    <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Connect Wallet</p>
                   </div>
                 </div>
               ))}
