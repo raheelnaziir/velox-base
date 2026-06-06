@@ -342,16 +342,15 @@ function DEXApp() {
 
                   {/* % shortcuts */}
                   <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                    {['10%', '25%', '50%', 'Max'].map(p => (
+                    {['25%', '50%', '75%', '100%'].map(p => (
                       <button key={p}
                         onClick={() => {
-                          if (p === 'Max') setSellAmount('1')
-                          else setSellAmount((parseFloat(p) / 100).toFixed(4))
+                          setSellAmount((parseFloat(p) / 100).toFixed(4))
                         }}
                         style={{
                           padding: '3px 8px', borderRadius: '6px', fontSize: '11px',
-                          background: '#1e2035', border: '1px solid #2d2f4a',
-                          color: '#8b8fa8', cursor: 'pointer', fontWeight: '500',
+                          background: '#ede9fe', border: '1px solid #ede9fe',
+                          color: '#1e1b4b', cursor: 'pointer', fontWeight: '600',
                         }}
                       >{p}</button>
                     ))}
