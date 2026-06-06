@@ -80,6 +80,8 @@ function DEXApp() {
   const [search1, setSearch1] = useState('')
   const [search2, setSearch2] = useState('')
 
+
+
   useEffect(() => {
     const getAddress = async () => {
       const ethereum = (window as any).ethereum
@@ -342,7 +344,7 @@ function DEXApp() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
 
                 {/* Sell box */}
-                <div style={{ background: '#e8e4ff', borderRadius: '16px', padding: '16px', position: 'relative' }}>
+                <div style={{ background: '#e8e4ff', borderRadius: '16px', padding: '16px', position: 'relative' }} onClick={e => e.stopPropagation()}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                     <span style={{ fontSize: '13px', color: '#12131f', fontWeight: '600' }}><b>Sell</b></span>
                     <button
@@ -351,8 +353,9 @@ function DEXApp() {
                         display: 'flex', alignItems: 'center', gap: '8px',
                         background: 'white', border: '1px solid #ede9fe',
                         borderRadius: '20px', padding: '6px 12px',
-                        cursor: 'pointer', color: 'white', fontWeight: '600', fontSize: '14px',
+                        cursor: 'pointer', color: '#1e1b4b', fontWeight: '600', fontSize: '14px',
                       }}
+
                     >
                       {sellToken?.image && (
                         <img src={sellToken.image} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%' }}
@@ -411,7 +414,7 @@ function DEXApp() {
                     }}>
                       <div style={{ padding: '12px' }}>
                         <input autoFocus type="text" placeholder="Search token..."
-                          value={search2} onChange={e => setSearch2(e.target.value)}
+                          value={search1} onChange={e => setSearch1(e.target.value)}
                           style={{
                             width: '100%', padding: '10px 12px', borderRadius: '10px',
                             background: '#f5f3ff', border: '1px solid #ede9fe',
@@ -470,7 +473,7 @@ function DEXApp() {
                 </div>
 
                 {/* Buy box */}
-                <div style={{ background: '#e8e4ff', borderRadius: '16px', padding: '16px', position: 'relative' }}>
+                <div style={{ background: '#e8e4ff', borderRadius: '16px', padding: '16px', position: 'relative' }} onClick={e => e.stopPropagation()}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                     <span style={{ fontSize: '13px', color: '#12131f', fontWeight: '600' }}><b>Buy</b></span>
                     <button
