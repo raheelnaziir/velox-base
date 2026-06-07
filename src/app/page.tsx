@@ -79,7 +79,18 @@ function DEXApp() {
   const [open2, setOpen2] = useState(false)
   const [search1, setSearch1] = useState('')
   const [search2, setSearch2] = useState('')
+  const [portfolio, setPortfolio] = useState<any>(null)
+  const [portfolioLoading, setPortfolioLoading] = useState(false)
 
+  useEffect(() => {
+    if (tab === 'portfolio' && address) {
+      setPortfolioLoading(true)
+      fetch(`/api/portfolio?address=${address}`)
+        .then(r => r.json())
+        .then(data => { setPortfolio(data); setPortfolioLoading(false) })
+        .catch(() => setPortfolioLoading(false))
+    }
+  }, [tab, address])
 
 
   useEffect(() => {
@@ -233,6 +244,7 @@ function DEXApp() {
         padding: '12px 32px', background: '#f0eeff',
         position: 'sticky', top: 0, zIndex: 10,
       }}>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <img
@@ -258,6 +270,7 @@ function DEXApp() {
             ))}
           </div>
         </div>
+
         {!address ? (
           <button
             onClick={async () => {
@@ -637,43 +650,103 @@ function DEXApp() {
             </div>
 
             <div style={{
-              background: 'white', borderRadius: '24px', padding: '24px',
+              background: '#f0eeff', borderRadius: '24px', padding: '24px',
               boxShadow: '0 4px 32px rgba(109,40,217,0.10)',
             }}>
-              <div style={{ textAlign: 'center', padding: '32px 0' }}>
-                <div style={{ fontSize: '40px', marginBottom: '12px' }}>📊</div>
-                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>
-                  Connect your wallet to view your portfolio
-                </p>
-                <Wallet>
-                  <ConnectWallet>
-                    <Avatar className="h-5 w-5" />
-                    <Name />
-                  </ConnectWallet>
-                </Wallet>
-              </div>
+              {!address ? (
+                <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                  <div style={{ fontSize: '40px', marginBottom: '12px' }}>📊</div>
+                  <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>
+                    Connect your wallet to view your portfolio
+                  </p>
+                  <button
+                    onClick={async () => {
+                      const ethereum = (window as any).ethereum
+                      if (ethereum) {
+                        const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
+                        setAddress(accounts[0])
+                      }
+                    }}
+                    style={{
+                      background: '#3b0764', color: 'white', border: 'none',
+                      borderRadius: '20px', padding: '10px 24px',
+                      fontWeight: '600', fontSize: '15px', cursor: 'pointer',
+                    }}
+                  >
+                    Connect
+                  </button>
+                </div>
+              ) : portfolioLoading ? (
+                <div style={{ textAlign: 'center', padding: '32px 0', color: '#6b7280' }}>
+                  Loading your portfolio...
+                </div>
+              ) : (
+                <>
+                  {/* Total value */}
+                  <div style={{
+                    background: '#e8e4ff', borderRadius: '16px', padding: '16px',
+                    marginBottom: '20px', textAlign: 'center',
+                  }}>
+                    <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 4px' }}>Total ETH Balance</p>
+                    <p style={{ fontSize: '28px', fontWeight: '800', color: '#1e1b4b', margin: 0 }}>
+                      {portfolio?.eth?.toFixed(6) || '0'} ETH
+                    </p>
+                  </div>
 
-              {TOKENS.map((token, i) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '14px 0', borderTop: '1px solid #f5f3ff',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <img src={token.image} alt={token.symbol}
-                      style={{ width: '38px', height: '38px', borderRadius: '50%' }} />
-                    <div>
-                      <p style={{ fontSize: '14px', fontWeight: '700', color: '#1e1b4b', margin: '0 0 2px' }}>
-                        {token.symbol}
+                  {/* ETH row */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '14px 0', borderBottom: '1px solid #f5f3ff',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <img src="https://wallet-api-production.s3.amazonaws.com/uploads/tokens/eth_288.png"
+                        alt="ETH" style={{ width: '38px', height: '38px', borderRadius: '50%' }} />
+                      <div>
+                        <p style={{ fontSize: '14px', fontWeight: '700', color: '#1e1b4b', margin: '0 0 2px' }}>ETH</p>
+                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Ethereum</p>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: 0 }}>
+                        {portfolio?.eth?.toFixed(6) || '0'}
                       </p>
-                      <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>{token.name}</p>
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: '0 0 2px' }}>—</p>
-                    <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Connect Wallet</p>
-                  </div>
-                </div>
-              ))}
+
+                  {/* Token rows */}
+                  {portfolio?.tokens?.length > 0 ? portfolio.tokens.map((token: any, i: number) => (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '14px 0', borderBottom: '1px solid #e8e4ff',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                          width: '38px', height: '38px', borderRadius: '50%',
+                          background: '#ede9fe', display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', fontWeight: '700', fontSize: '12px', color: '#6d28d9',
+                        }}>
+                          {token.symbol.slice(0, 3)}
+                        </div>
+                        <div>
+                          <p style={{ fontSize: '14px', fontWeight: '700', color: '#1e1b4b', margin: '0 0 2px' }}>
+                            {token.symbol}
+                          </p>
+                          <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>{token.name}</p>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: 0 }}>
+                          {token.balance.toFixed(4)}
+                        </p>
+                      </div>
+                    </div>
+                  )) : (
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#9ca3af', fontSize: '14px' }}>
+                      No token balances found
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         )}
