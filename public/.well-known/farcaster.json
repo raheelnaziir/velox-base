@@ -1,0 +1,17 @@
+{
+    "accountAssociation": {
+        "header": "",
+        "payload": "",
+        "signature": ""
+    },
+    "frame": {
+        "version": "1",
+        "name": "Velox",
+        "iconUrl": "https://velox-base.vercel.app/favicon.png",
+        "homeUrl": "https://velox-base.vercel.app",
+        "imageUrl": "https://velox-base.vercel.app/favicon.png",
+        "buttonTitle": " Swap Tokens",
+        "splashImageUrl": "https://velox-base.vercel.app/favicon.png",
+        "splashBackgroundColor": "#f0eeff"
+    }
+}
