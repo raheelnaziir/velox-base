@@ -81,6 +81,37 @@ function DEXApp() {
   const [search2, setSearch2] = useState('')
   const [portfolio, setPortfolio] = useState<any>(null)
   const [portfolioLoading, setPortfolioLoading] = useState(false)
+  const [sellBalance, setSellBalance] = useState('0')
+
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (!address || !sellToken) return
+      try {
+        const ethereum = (window as any).ethereum
+        if (!ethereum) return
+
+        if (sellToken.symbol === 'ETH') {
+          const bal = await ethereum.request({
+            method: 'eth_getBalance',
+            params: [address, 'latest'],
+          })
+          const eth = parseInt(bal, 16) / 1e18
+          setSellBalance(eth.toFixed(4))
+        } else {
+          const data = '0x70a08231' + address.slice(2).padStart(64, '0')
+          const result = await ethereum.request({
+            method: 'eth_call',
+            params: [{ to: sellToken.address, data }, 'latest'],
+          })
+          const balance = parseInt(result, 16) / Math.pow(10, sellToken.decimals)
+          setSellBalance(balance.toFixed(4))
+        }
+      } catch (e) {
+        setSellBalance('0')
+      }
+    }
+    fetchBalance()
+  }, [address, sellToken])
 
   useEffect(() => {
     if (tab === 'portfolio' && address) {
@@ -412,7 +443,7 @@ function DEXApp() {
                     <span style={{ fontSize: '12px', color: '#8b8fa8' }}>
                       {sellAmount && rate ? `~$${(parseFloat(sellAmount) * (parseFloat(buyAmount) / parseFloat(sellAmount))).toFixed(2)}` : '$0.00'}
                     </span>
-                    <span style={{ fontSize: '12px', color: '#8b8fa8' }}>Balance: —</span>
+                    <span style={{ fontSize: '12px', color: '#6b7280' }}>Balance: {sellBalance} {sellToken?.symbol}</span>
                   </div>
 
                   {/* Sell dropdown */}
