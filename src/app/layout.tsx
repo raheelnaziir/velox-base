@@ -13,7 +13,7 @@ export const metadata: Metadata = {
       version: '1',
       imageUrl: 'https://velox-base.vercel.app/favicon.png',
       button: {
-        title: 'Swap Tokens',
+        title: 'Swap To kens',
         action: {
           type: 'launch_frame',
           name: 'Velox',

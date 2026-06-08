@@ -580,7 +580,7 @@ function DEXApp() {
                       onClick={async () => {
                         const ethereum = (window as any).ethereum
                         if (ethereum) {
-                          const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
+                          const accounts = await ethereum.request({ method: 'eth_account' })
                           setAddress(accounts[0])
                         } else {
                           alert('No wallet found. Please install MetaMask or Coinbase Wallet.')
