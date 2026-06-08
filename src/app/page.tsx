@@ -82,6 +82,7 @@ function DEXApp() {
   const [portfolio, setPortfolio] = useState<any>(null)
   const [portfolioLoading, setPortfolioLoading] = useState(false)
   const [sellBalance, setSellBalance] = useState('0')
+  const [showSuccess, setShowSuccess] = useState(false)
 
   useEffect(() => {
     const fetchBalance = async () => {
@@ -259,6 +260,7 @@ function DEXApp() {
       })
 
       setTxHash(hash)
+      setShowSuccess(true)
     } catch (e: any) {
       console.error(e)
       alert(e.message || 'Swap failed')
@@ -369,7 +371,10 @@ function DEXApp() {
               width: '100%', maxWidth: '440px',
               background: '#f0eeff', borderRadius: '24px', padding: '20px',
               boxShadow: '0 4px 32px rgba(0,0,0,0.3)',
-              position: 'relative',
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
             }}>
 
               {/* Card header */}
@@ -649,22 +654,10 @@ function DEXApp() {
                   </button>
                 )}
 
-                {txHash && (
-                  <div style={{
-                    padding: '12px 14px', borderRadius: '12px',
-                    background: '#0f2a1a', border: '1px solid #1a5c35', marginTop: '8px',
-                  }}>
-                    <p style={{ fontSize: '13px', color: '#4ade80', margin: '0 0 4px', fontWeight: '600' }}>
-                      ✅ Swap successful!
-                    </p>
-                    <a href={'https://basescan.org/tx/' + txHash} target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize: '12px', color: '#1e1b4b' }}>
-                      View on Basescan →
-                    </a>
-                  </div>
-                )}
+
 
               </div>
+
             </div>
           </>
         )}
@@ -782,6 +775,85 @@ function DEXApp() {
           </div>
         )}
       </div>
+      {showSuccess && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(15, 23, 42, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '380px',
+              background: 'white',
+              borderRadius: '22px',
+              padding: '24px',
+              boxShadow: '0 24px 60px rgba(109,40,217,0.25)',
+              textAlign: 'center',
+              border: '1px solid #ede9fe',
+              transform: 'translateY(-40px)',
+            }}
+          >
+            <div style={{ fontSize: '48px', marginBottom: '14px' }}></div>
+
+            <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1e1b4b', margin: '0 0 8px' }}>
+              Swap Successful!
+            </h2>
+
+            <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 18px' }}>
+              Your swap has been confirmed on Base
+            </p>
+
+            <a
+              href={`https://basescan.org/tx/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'block',
+                padding: '12px',
+                background: '#ede9fe',
+                borderRadius: '12px',
+                color: '#6d28d9',
+                fontWeight: '600',
+                fontSize: '14px',
+                textDecoration: 'none',
+                marginBottom: '12px',
+              }}
+            >
+              View on Basescan →
+            </a>
+
+            <button
+              onClick={() => {
+                setShowSuccess(false)
+                setTxHash('')
+              }}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '12px',
+                background: '#3b0764',
+                color: 'white',
+                border: 'none',
+                fontWeight: '600',
+                fontSize: '15px',
+                cursor: 'pointer',
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
