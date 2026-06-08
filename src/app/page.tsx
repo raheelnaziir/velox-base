@@ -97,7 +97,7 @@ function DEXApp() {
     const getAddress = async () => {
       const ethereum = (window as any).ethereum
       if (ethereum) {
-        const accounts = await ethereum.request({ method: 'eth_account' })
+        const accounts = await ethereum.request({ method: 'eth_accounts' })
         if (accounts.length > 0) setAddress(accounts[0])
       }
     }

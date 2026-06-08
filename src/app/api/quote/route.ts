@@ -14,6 +14,8 @@ export async function GET(req: NextRequest) {
         buyToken,
         sellAmount,
         ...(taker ? { taker } : {}),
+        affiliateAddress: '0x2d64d7924eeadaa270b893b28c3a1c9ccfd9eabc',
+        affiliateFee: '0.01',
     })
 
     // Use quote endpoint (returns tx data) if taker provided, else price
@@ -25,6 +27,7 @@ export async function GET(req: NextRequest) {
             headers: {
                 '0x-api-key': process.env.ZERO_X_API_KEY!,
                 '0x-version': 'v2',
+                '0x-builder-code': 'bc_syb3heao',
             },
         }
     )
