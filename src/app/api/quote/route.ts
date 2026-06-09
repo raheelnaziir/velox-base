@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
         sellToken,
         buyToken,
         sellAmount,
+        slippageBps: '100',
         ...(taker ? { taker } : {}),
         affiliateAddress: '0x2d64d7924eeadaa270b893b28c3a1c9ccfd9eabc',
         affiliateFee: '0.01',
