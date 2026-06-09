@@ -351,20 +351,6 @@ function DEXApp() {
         {tab === 'swap' && (
           <>
             {/* Side buttons — unchanged */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-              <button style={{
-                width: '48px', height: '48px', borderRadius: '14px',
-                background: 'white', border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.08)', fontSize: '18px',
-              }}>⇄</button>
-              <button style={{
-                width: '48px', height: '48px', borderRadius: '14px',
-                background: 'white', border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.08)', fontSize: '18px',
-              }}>⛽</button>
-            </div>
 
             {/* Swap card — dark UI */}
             <div style={{
