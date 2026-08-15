@@ -14,6 +14,7 @@ import { parseUnits, formatUnits } from 'viem'
 import { getBaseTokens, type Token } from './tokens'
 import { getSwapQuote, type QuoteResponse } from './quote'
 import RouteDetails from './RouteDetails'
+import type { Portfolio, PortfolioToken } from './portfolio-types'
 import {
   WalletModal,
   getProvider,
@@ -95,6 +96,32 @@ function formatBalance(wei: bigint, decimals: number): string {
   return trimmed ? `${whole}.${trimmed}` : whole
 }
 
+/** Compact display for token quantities, which range from dust to absurd
+ *  supplies on junk airdrops. */
+function formatTokenQty(value: string): string {
+  const n = parseFloat(value)
+  if (!Number.isFinite(n)) return '0'
+  if (n === 0) return '0'
+  // Past quadrillions a suffix stops helping ("1.15e+29T"), so go exponential.
+  if (n >= 1e15) return n.toExponential(2)
+  if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`
+  if (n >= 1) return n.toLocaleString('en-US', { maximumFractionDigits: 4 })
+  if (n < 0.0001) return n.toExponential(2)
+  return n.toLocaleString('en-US', { maximumFractionDigits: 8 })
+}
+
+function formatUsdValue(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
+  if (value === 0) return '$0.00'
+  if (value < 0.01) return '<$0.01'
+  return `$${value.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
+}
+
 type Tab = 'swap' | 'portfolio'
 
 function DEXApp() {
@@ -113,8 +140,10 @@ function DEXApp() {
   const [open2, setOpen2] = useState(false)
   const [search1, setSearch1] = useState('')
   const [search2, setSearch2] = useState('')
-  const [portfolio, setPortfolio] = useState<any>(null)
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null)
   const [portfolioLoading, setPortfolioLoading] = useState(false)
+  const [portfolioError, setPortfolioError] = useState('')
+  const [showUnpriced, setShowUnpriced] = useState(false)
   const [sellBalanceWei, setSellBalanceWei] = useState<bigint | null>(null)
   const [balanceState, setBalanceState] = useState<BalanceState>('idle')
   const [showSuccess, setShowSuccess] = useState(false)
@@ -181,15 +210,34 @@ function DEXApp() {
     return () => { cancelled = true }
   }, [address, sellToken])
 
-  useEffect(() => {
-    if (tab === 'portfolio' && address) {
-      setPortfolioLoading(true)
-      fetch(`/api/portfolio?address=${address}`)
-        .then(r => r.json())
-        .then(data => { setPortfolio(data); setPortfolioLoading(false) })
-        .catch(() => setPortfolioLoading(false))
+  const loadPortfolio = useCallback(async (signal?: AbortSignal) => {
+    if (!address) return
+    setPortfolioLoading(true)
+    setPortfolioError('')
+    try {
+      const res = await fetch(`/api/portfolio?address=${address}`, { signal })
+      const data = await res.json()
+      if (signal?.aborted) return
+      if (!res.ok || data?.success === false) {
+        setPortfolio(null)
+        setPortfolioError(data?.error || 'Could not load your portfolio.')
+      } else {
+        setPortfolio(data)
+      }
+    } catch (e) {
+      if (signal?.aborted || (e as Error)?.name === 'AbortError') return
+      setPortfolio(null)
+      setPortfolioError('Could not load your portfolio. Check your connection.')
     }
-  }, [tab, address])
+    if (!signal?.aborted) setPortfolioLoading(false)
+  }, [address])
+
+  useEffect(() => {
+    if (tab !== 'portfolio' || !address) return
+    const controller = new AbortController()
+    loadPortfolio(controller.signal)
+    return () => controller.abort()
+  }, [tab, address, loadPortfolio])
 
 
   useEffect(() => {
@@ -867,7 +915,27 @@ function DEXApp() {
                 </div>
               ) : portfolioLoading ? (
                 <div style={{ textAlign: 'center', padding: '32px 0', color: '#6b7280' }}>
-                  Loading your portfolio...
+                  <p style={{ fontSize: '14px', margin: '0 0 6px' }}>Loading your portfolio...</p>
+                  <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>
+                    Scanning Base for your token balances
+                  </p>
+                </div>
+              ) : portfolioError ? (
+                <div style={{ textAlign: 'center', padding: '28px 0' }}>
+                  <div style={{ fontSize: '32px', marginBottom: '10px' }}>⚠️</div>
+                  <p style={{ color: '#b91c1c', fontSize: '13px', margin: '0 0 16px' }}>
+                    {portfolioError}
+                  </p>
+                  <button
+                    onClick={() => loadPortfolio()}
+                    style={{
+                      background: '#3b0764', color: 'white', border: 'none',
+                      borderRadius: '20px', padding: '9px 22px',
+                      fontWeight: '600', fontSize: '14px', cursor: 'pointer',
+                    }}
+                  >
+                    Try again
+                  </button>
                 </div>
               ) : (
                 <>
@@ -876,16 +944,70 @@ function DEXApp() {
                     background: '#e8e4ff', borderRadius: '16px', padding: '16px',
                     marginBottom: '20px', textAlign: 'center',
                   }}>
-                    <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 4px' }}>Total ETH Balance</p>
-                    <p style={{ fontSize: '28px', fontWeight: '800', color: '#1e1b4b', margin: 0 }}>
-                      {portfolio?.eth?.toFixed(6) || '0'} ETH
+                    <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 4px' }}>
+                      Total Portfolio Value
                     </p>
+                    <p style={{ fontSize: '28px', fontWeight: '800', color: '#1e1b4b', margin: 0 }}>
+                      {portfolio?.ethPriceUsd != null
+                        ? formatUsdValue(portfolio?.totalValueUsd)
+                        : `${(portfolio?.eth ?? 0).toFixed(6)} ETH`}
+                    </p>
+                    {portfolio?.ethPriceUsd != null && (
+                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0' }}>
+                        {(portfolio?.eth ?? 0).toFixed(6)} ETH
+                        {portfolio?.counts?.total > 0 && ` · ${portfolio.counts.total} token${portfolio.counts.total === 1 ? '' : 's'}`}
+                      </p>
+                    )}
                   </div>
+
+                  {/* Token discovery failed but ETH loaded */}
+                  {portfolio?.tokensUnavailable && (
+                    <div style={{
+                      padding: '10px 12px', marginBottom: '14px',
+                      background: '#fffbeb', border: '1px solid #fde68a',
+                      borderRadius: '10px', fontSize: '12px', color: '#92400e',
+                    }}>
+                      Token balances couldn&apos;t be loaded right now — this wallet holds
+                      a lot of tokens and the scan timed out.{' '}
+                      <button
+                        onClick={() => loadPortfolio()}
+                        style={{
+                          background: 'none', border: 'none', padding: 0,
+                          color: '#92400e', fontWeight: '700', cursor: 'pointer',
+                          textDecoration: 'underline', fontSize: '12px',
+                        }}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Fell back to the endpoint without prices */}
+                  {portfolio?.pricesUnavailable && (
+                    <div style={{
+                      padding: '10px 12px', marginBottom: '14px',
+                      background: '#fffbeb', border: '1px solid #fde68a',
+                      borderRadius: '10px', fontSize: '12px', color: '#92400e',
+                    }}>
+                      Showing balances without prices — the price source timed out
+                      for this wallet.{' '}
+                      <button
+                        onClick={() => loadPortfolio()}
+                        style={{
+                          background: 'none', border: 'none', padding: 0,
+                          color: '#92400e', fontWeight: '700', cursor: 'pointer',
+                          textDecoration: 'underline', fontSize: '12px',
+                        }}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
 
                   {/* ETH row */}
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '14px 0', borderBottom: '1px solid #f5f3ff',
+                    padding: '14px 0', borderBottom: '1px solid #e8e4ff',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <img src="https://wallet-api-production.s3.amazonaws.com/uploads/tokens/eth_288.png"
@@ -897,43 +1019,133 @@ function DEXApp() {
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: 0 }}>
-                        {portfolio?.eth?.toFixed(6) || '0'}
+                        {(portfolio?.eth ?? 0).toFixed(6)}
                       </p>
+                      {portfolio?.ethValueUsd != null && (
+                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '2px 0 0' }}>
+                          {formatUsdValue(portfolio.ethValueUsd)}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   {/* Token rows */}
-                  {portfolio?.tokens?.length > 0 ? portfolio.tokens.map((token: any, i: number) => (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '14px 0', borderBottom: '1px solid #e8e4ff',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{
-                          width: '38px', height: '38px', borderRadius: '50%',
-                          background: '#ede9fe', display: 'flex', alignItems: 'center',
-                          justifyContent: 'center', fontWeight: '700', fontSize: '12px', color: '#6d28d9',
-                        }}>
-                          {token.symbol.slice(0, 3)}
+                  {(() => {
+                    const all: PortfolioToken[] = portfolio?.tokens ?? []
+                    // With no price source, every token reads as "unpriced" —
+                    // show them directly instead of hiding them all.
+                    const pricesDown = Boolean(portfolio?.pricesUnavailable)
+                    const priced = pricesDown ? all : all.filter(t => t.valueUsd != null)
+                    const unpriced = pricesDown ? [] : all.filter(t => t.valueUsd == null)
+                    const visible = showUnpriced ? [...priced, ...unpriced] : priced
+
+                    if (!all.length) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '20px 0', color: '#9ca3af', fontSize: '14px' }}>
+                          {portfolio?.tokensUnavailable
+                            ? 'Token list unavailable'
+                            : 'No token balances found'}
                         </div>
-                        <div>
-                          <p style={{ fontSize: '14px', fontWeight: '700', color: '#1e1b4b', margin: '0 0 2px' }}>
-                            {token.symbol}
+                      )
+                    }
+
+                    return (
+                      <>
+                        {visible.map((token, i) => (
+                          <div key={token.address || i} style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '14px 0', borderBottom: '1px solid #e8e4ff', gap: '12px',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                              {token.image ? (
+                                <img
+                                  src={token.image}
+                                  alt=""
+                                  style={{
+                                    width: '38px', height: '38px', borderRadius: '50%',
+                                    flexShrink: 0, objectFit: 'cover', background: '#ede9fe',
+                                  }}
+                                  onError={e => { e.currentTarget.style.visibility = 'hidden' }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: '38px', height: '38px', borderRadius: '50%',
+                                  background: '#ede9fe', display: 'flex', alignItems: 'center',
+                                  justifyContent: 'center', fontWeight: '700', fontSize: '12px',
+                                  color: '#6d28d9', flexShrink: 0,
+                                }}>
+                                  {String(token.symbol ?? '?').slice(0, 3)}
+                                </div>
+                              )}
+                              <div style={{ minWidth: 0 }}>
+                                <p style={{
+                                  fontSize: '14px', fontWeight: '700', color: '#1e1b4b',
+                                  margin: '0 0 2px', overflow: 'hidden',
+                                  textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                }}>
+                                  {token.symbol}
+                                </p>
+                                <p style={{
+                                  fontSize: '12px', color: '#9ca3af', margin: 0,
+                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                }}>
+                                  {token.name}
+                                </p>
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <p
+                                style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: 0 }}
+                                title={token.balance}
+                              >
+                                {formatTokenQty(token.balance)}
+                              </p>
+                              <p style={{ fontSize: '12px', color: '#9ca3af', margin: '2px 0 0' }}>
+                                {token.valueUsd != null ? formatUsdValue(token.valueUsd) : 'No price'}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Unpriced tokens are mostly airdrop spam, so they're
+                            collapsed rather than padding out the list. */}
+                        {unpriced.length > 0 && (
+                          <button
+                            onClick={() => setShowUnpriced(v => !v)}
+                            style={{
+                              width: '100%', marginTop: '14px', padding: '11px',
+                              background: '#ede9fe', border: 'none', borderRadius: '12px',
+                              color: '#6d28d9', fontWeight: '600', fontSize: '13px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {showUnpriced
+                              ? `Hide ${unpriced.length} unpriced token${unpriced.length === 1 ? '' : 's'}`
+                              : `Show ${unpriced.length} unpriced token${unpriced.length === 1 ? '' : 's'}`}
+                          </button>
+                        )}
+
+                        {!priced.length && !showUnpriced && (
+                          <p style={{
+                            textAlign: 'center', padding: '18px 0 0',
+                            color: '#9ca3af', fontSize: '13px', margin: 0,
+                          }}>
+                            No tokens with a known price.
                           </p>
-                          <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>{token.name}</p>
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b', margin: 0 }}>
-                          {token.balance.toFixed(4)}
-                        </p>
-                      </div>
-                    </div>
-                  )) : (
-                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#9ca3af', fontSize: '14px' }}>
-                      No token balances found
-                    </div>
-                  )}
+                        )}
+
+                        {/* Never let a cap look like the full picture. */}
+                        {portfolio && portfolio.counts.total > portfolio.counts.returned && (
+                          <p style={{
+                            fontSize: '11px', color: '#9ca3af',
+                            textAlign: 'center', margin: '14px 0 0',
+                          }}>
+                            Showing the top {portfolio.counts.returned} of {portfolio.counts.total} tokens by value.
+                          </p>
+                        )}
+                      </>
+                    )
+                  })()}
                 </>
               )}
             </div>
