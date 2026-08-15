@@ -426,6 +426,11 @@ function DEXApp() {
     setSwapping(false)
   }
 
+  // Drives whether the route panel exists at all. Mid-typing values like
+  // "0", "0." or "abc" count as no amount.
+  const parsedSellAmount = parseFloat(sellAmount)
+  const hasSellAmount = Number.isFinite(parsedSellAmount) && parsedSellAmount > 0
+
   return (
     <div style={{ minHeight: '100vh', background: '#f0eeff', fontFamily: 'sans-serif' }}>
 
@@ -810,15 +815,19 @@ function DEXApp() {
 
             </div>
 
-            <RouteDetails
-              quote={quote}
-              sellToken={sellToken}
-              buyToken={buyToken}
-              sellAmount={sellAmount}
-              loading={loading}
-              error={quoteError}
-              ethUsd={ethUsd}
-            />
+            {/* Only mounted once there's a real amount to quote — no
+                placeholder panel sitting next to the card beforehand. */}
+            {hasSellAmount && (
+              <RouteDetails
+                quote={quote}
+                sellToken={sellToken}
+                buyToken={buyToken}
+                sellAmount={sellAmount}
+                loading={loading}
+                error={quoteError}
+                ethUsd={ethUsd}
+              />
+            )}
 
             </div>
           </>

@@ -1,6 +1,6 @@
 'use client'
 
-import { formatUnits } from 'viem'
+import { formatUnits, parseUnits } from 'viem'
 import type { Token } from './tokens'
 import type { QuoteResponse, RouteFill } from './quote'
 import { BASE_BLOCK_SECONDS, EST_BLOCKS_TO_CONFIRM, SLIPPAGE_BPS } from './config'
@@ -188,33 +188,41 @@ export default function RouteDetails({
   error: string
   ethUsd: number | null
 }) {
+  // The debounce means a loaded quote can briefly belong to a previous
+  // amount. Compare against the quote's own sellAmount so the panel is
+  // never presented as current when it isn't.
+  let stale = false
+  if (quote?.sellAmount && sellToken) {
+    try {
+      stale = BigInt(quote.sellAmount) !== parseUnits(sellAmount, sellToken.decimals)
+    } catch {
+      stale = false
+    }
+  }
+  const busy = loading || stale
+
   const shell = (children: React.ReactNode) => (
     <div style={{
       width: '340px', flexShrink: 0,
       background: '#f0eeff', borderRadius: '24px', padding: '20px',
       boxShadow: '0 4px 32px rgba(109,40,217,0.10)',
     }}>
-      <h3 style={{
-        fontSize: '15px', fontWeight: '800', color: '#1e1b4b',
-        margin: '0 0 14px',
+      <div style={{
+        display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', margin: '0 0 14px', gap: '8px',
       }}>
-        Route details
-      </h3>
+        <h3 style={{ fontSize: '15px', fontWeight: '800', color: '#1e1b4b', margin: 0 }}>
+          Route details
+        </h3>
+        {busy && quote && (
+          <span style={{ fontSize: '10px', color: '#9ca3af', flexShrink: 0 }}>
+            Updating…
+          </span>
+        )}
+      </div>
       {children}
     </div>
   )
-
-  if (loading) {
-    return shell(
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <SkeletonRow /><Divider />
-        <SkeletonRow /><Divider />
-        <SkeletonRow /><Divider />
-        <SkeletonRow /><Divider />
-        <SkeletonRow />
-      </div>
-    )
-  }
 
   if (error) {
     return shell(
@@ -224,11 +232,18 @@ export default function RouteDetails({
     )
   }
 
+  // Skeleton only for the very first quote. Once we have one, keep showing it
+  // (dimmed) while a new amount is fetched, so retyping doesn't flash empty.
   if (!quote || !sellToken || !buyToken) {
+    if (!busy) return null
     return shell(
-      <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0, lineHeight: 1.6 }}>
-        Enter an amount to see the best route, rate, network cost and price impact.
-      </p>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <SkeletonRow /><Divider />
+        <SkeletonRow /><Divider />
+        <SkeletonRow /><Divider />
+        <SkeletonRow /><Divider />
+        <SkeletonRow />
+      </div>
     )
   }
 
@@ -293,7 +308,10 @@ export default function RouteDetails({
   const lowLiquidity = quote.liquidityAvailable === false
 
   return shell(
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      opacity: busy ? 0.5 : 1, transition: 'opacity 0.15s',
+    }}>
       {lowLiquidity && (
         <div style={{
           padding: '10px 12px', marginBottom: '10px',
