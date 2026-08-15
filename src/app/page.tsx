@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Providers from './providers'
 import {
   ConnectWallet,
@@ -12,7 +12,14 @@ import { Avatar, Name, Identity, Address } from '@coinbase/onchainkit/identity'
 import { base } from 'viem/chains'
 import { parseUnits, formatUnits } from 'viem'
 import { getBaseTokens, type Token } from './tokens'
-import { getSwapQuote } from './quote'
+import { getSwapQuote, type QuoteResponse } from './quote'
+import RouteDetails from './RouteDetails'
+import {
+  WalletModal,
+  getProvider,
+  restoreSavedProvider,
+  clearActiveWallet,
+} from './wallet'
 
 const ETH = {
   name: 'Ethereum',
@@ -61,6 +68,33 @@ const WETH = {
 
 const TOKENS = [ETH, USDC, USDT, DAI, WETH]
 
+// The 0x API's stand-in address for native ETH (it isn't a real contract).
+const NATIVE_SENTINEL = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+
+function isNativeToken(token: Token | null): boolean {
+  if (!token) return false
+  return token.symbol === 'ETH' || token.address?.toLowerCase() === NATIVE_SENTINEL
+}
+
+// A "Max" of the full ETH balance can never actually be swapped — gas comes
+// out of the same balance — so hold a little back on native 100%.
+const GAS_RESERVE_WEI = parseUnits('0.00003', 18)
+
+// tsconfig targets ES2017, so `0n` literals aren't allowed here.
+const ZERO = BigInt(0)
+const HUNDRED = BigInt(100)
+
+type BalanceState = 'idle' | 'loading' | 'ready' | 'error'
+
+/** Trim a full-precision amount down to something readable, without rounding up. */
+function formatBalance(wei: bigint, decimals: number): string {
+  const full = formatUnits(wei, decimals)
+  if (!full.includes('.')) return full
+  const [whole, frac] = full.split('.')
+  const trimmed = frac.slice(0, 6).replace(/0+$/, '')
+  return trimmed ? `${whole}.${trimmed}` : whole
+}
+
 type Tab = 'swap' | 'portfolio'
 
 function DEXApp() {
@@ -81,37 +115,70 @@ function DEXApp() {
   const [search2, setSearch2] = useState('')
   const [portfolio, setPortfolio] = useState<any>(null)
   const [portfolioLoading, setPortfolioLoading] = useState(false)
-  const [sellBalance, setSellBalance] = useState('0')
+  const [sellBalanceWei, setSellBalanceWei] = useState<bigint | null>(null)
+  const [balanceState, setBalanceState] = useState<BalanceState>('idle')
   const [showSuccess, setShowSuccess] = useState(false)
+  const [showWallets, setShowWallets] = useState(false)
+  // Bumped whenever the active wallet changes, so the account listener
+  // re-attaches to the newly selected provider.
+  const [walletVersion, setWalletVersion] = useState(0)
+  const [quote, setQuote] = useState<QuoteResponse | null>(null)
+  const [quoteError, setQuoteError] = useState('')
+  const [ethUsd, setEthUsd] = useState<number | null>(null)
+  // Monotonic counter so late-arriving quotes can be discarded.
+  const quoteRequestId = useRef(0)
 
   useEffect(() => {
-    const fetchBalance = async () => {
-      if (!address || !sellToken) return
-      try {
-        const ethereum = (window as any).ethereum
-        if (!ethereum) return
+    if (!address || !sellToken) {
+      setSellBalanceWei(null)
+      setBalanceState('idle')
+      return
+    }
 
-        if (sellToken.symbol === 'ETH') {
+    // Guards against a slow response for a previously selected token
+    // landing after the user has already switched to another one.
+    let cancelled = false
+    setBalanceState('loading')
+
+    const fetchBalance = async () => {
+      try {
+        const ethereum = getProvider()
+        if (!ethereum) throw new Error('No wallet provider available')
+
+        let wei: bigint
+        if (isNativeToken(sellToken)) {
           const bal = await ethereum.request({
             method: 'eth_getBalance',
             params: [address, 'latest'],
           })
-          const eth = parseInt(bal, 16) / 1e18
-          setSellBalance(eth.toFixed(4))
+          // BigInt, not parseInt — float math loses precision past ~9007 ETH
+          // and would silently corrupt the amount we send.
+          wei = BigInt(bal)
         } else {
-          const data = '0x70a08231' + address.slice(2).padStart(64, '0')
+          const data = '0x70a08231' + address.slice(2).toLowerCase().padStart(64, '0')
           const result = await ethereum.request({
             method: 'eth_call',
             params: [{ to: sellToken.address, data }, 'latest'],
           })
-          const balance = parseInt(result, 16) / Math.pow(10, sellToken.decimals)
-          setSellBalance(balance.toFixed(4))
+          // A non-token address returns '0x' rather than erroring.
+          if (!result || result === '0x') throw new Error('No balanceOf response')
+          wei = BigInt(result)
         }
-      } catch (e) {
-        setSellBalance('0')
+
+        if (cancelled) return
+        setSellBalanceWei(wei)
+        setBalanceState('ready')
+      } catch (err) {
+        if (cancelled) return
+        console.error('Failed to fetch balance:', err)
+        // Distinct from a real zero balance, so the UI can say so.
+        setSellBalanceWei(null)
+        setBalanceState('error')
       }
     }
+
     fetchBalance()
+    return () => { cancelled = true }
   }, [address, sellToken])
 
   useEffect(() => {
@@ -126,21 +193,31 @@ function DEXApp() {
 
 
   useEffect(() => {
-    const getAddress = async () => {
-      const ethereum = (window as any).ethereum
-      if (ethereum) {
+    let ethereum: ReturnType<typeof getProvider> = null
+    let cancelled = false
+    const onAccountsChanged = (accounts: string[]) => {
+      setAddress(accounts[0] || '')
+    }
+
+    const init = async () => {
+      // Reconnect through the wallet chosen last time, not whichever
+      // extension happens to own window.ethereum.
+      ethereum = walletVersion === 0 ? await restoreSavedProvider() : getProvider()
+      if (!ethereum || cancelled) return
+      try {
         const accounts = await ethereum.request({ method: 'eth_accounts' })
-        if (accounts.length > 0) setAddress(accounts[0])
-      }
+        if (accounts.length > 0 && !cancelled) setAddress(accounts[0])
+      } catch { }
+      if (cancelled) return
+      ethereum.on?.('accountsChanged', onAccountsChanged)
     }
-    getAddress()
-    const ethereum = (window as any).ethereum
-    if (ethereum) {
-      ethereum.on('accountsChanged', (accounts: string[]) => {
-        setAddress(accounts[0] || '')
-      })
+    init()
+
+    return () => {
+      cancelled = true
+      ethereum?.removeListener?.('accountsChanged', onAccountsChanged)
     }
-  }, [])
+  }, [walletVersion])
 
   useEffect(() => {
     getBaseTokens().then(list => {
@@ -159,36 +236,67 @@ function DEXApp() {
   }, [])
 
   const fetchQuote = useCallback(async () => {
-    if (!sellToken || !buyToken || !sellAmount || parseFloat(sellAmount) === 0) {
+    const parsed = parseFloat(sellAmount)
+    if (!sellToken || !buyToken || !sellAmount || !Number.isFinite(parsed) || parsed <= 0) {
       setBuyAmount('')
       setRate('')
+      setQuote(null)
+      setQuoteError('')
       return
     }
-    setLoading(true)
-    try {
-      const sellAmountWei = parseUnits(sellAmount, sellToken.decimals).toString()
-      const sellAddr = sellToken.symbol === 'ETH'
-        ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-        : sellToken.address
-      const buyAddr = buyToken.symbol === 'ETH'
-        ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-        : buyToken.address
 
-      const quote = await getSwapQuote({
+    // Mid-typing values like "0." or "1.2.3" throw here; treated as
+    // "no quote yet" rather than an error state.
+    let sellAmountWei: bigint
+    try {
+      sellAmountWei = parseUnits(sellAmount, sellToken.decimals)
+    } catch {
+      setBuyAmount('')
+      setRate('')
+      setQuote(null)
+      setQuoteError('')
+      return
+    }
+
+    // A stale in-flight quote must never overwrite a newer one.
+    const requestId = ++quoteRequestId.current
+    setLoading(true)
+    setQuoteError('')
+
+    try {
+      const sellAddr = isNativeToken(sellToken) ? NATIVE_SENTINEL : sellToken.address
+      const buyAddr = isNativeToken(buyToken) ? NATIVE_SENTINEL : buyToken.address
+
+      const result = await getSwapQuote({
         sellToken: sellAddr,
         buyToken: buyAddr,
-        sellAmount: sellAmountWei,
+        sellAmount: sellAmountWei.toString(),
       })
 
-      const buyAmt = formatUnits(BigInt(quote.buyAmount), buyToken.decimals)
+      if (requestId !== quoteRequestId.current) return
+
+      if (result.liquidityAvailable === false || !result.buyAmount) {
+        setQuote(result)
+        setBuyAmount('—')
+        setRate('')
+        setQuoteError('No liquidity available for this pair.')
+        return
+      }
+
+      setQuote(result)
+      const buyAmt = formatUnits(BigInt(result.buyAmount), buyToken.decimals)
       setBuyAmount(parseFloat(buyAmt).toFixed(6))
-      const r = parseFloat(buyAmt) / parseFloat(sellAmount)
+      const r = parseFloat(buyAmt) / parsed
       setRate(`1 ${sellToken.symbol} = ${r.toFixed(4)} ${buyToken.symbol}`)
     } catch (e) {
+      if (requestId !== quoteRequestId.current) return
       setBuyAmount('—')
       setRate('Unable to fetch quote')
+      setQuote(null)
+      setQuoteError('Could not fetch a quote. Check your connection and try again.')
+    } finally {
+      if (requestId === quoteRequestId.current) setLoading(false)
     }
-    setLoading(false)
   }, [sellToken, buyToken, sellAmount])
 
   useEffect(() => {
@@ -206,26 +314,75 @@ function DEXApp() {
     initSDK()
   }, [])
 
+  // ETH/USD for the network-cost figure. Non-critical: a failure just means
+  // the fee shows in ETH only.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/ethprice')
+      .then(r => r.json())
+      .then(d => {
+        if (!cancelled && typeof d?.usd === 'number') setEthUsd(d.usd)
+      })
+      .catch(() => { })
+    return () => { cancelled = true }
+  }, [])
+
+  const applyPercent = useCallback((percent: number) => {
+    if (!sellToken || sellBalanceWei === null || sellBalanceWei === ZERO) return
+
+    // Integer math in wei — no float rounding that could exceed the balance.
+    let amount = (sellBalanceWei * BigInt(percent)) / HUNDRED
+
+    if (percent === 100 && isNativeToken(sellToken)) {
+      amount = amount > GAS_RESERVE_WEI ? amount - GAS_RESERVE_WEI : ZERO
+    }
+
+    if (amount <= ZERO) {
+      setSellAmount('')
+      return
+    }
+    setSellAmount(formatUnits(amount, sellToken.decimals))
+  }, [sellToken, sellBalanceWei])
+
   const handleSwap = async () => {
 
     if (!sellToken || !buyToken || !sellAmount) {
       alert('Please fill in all fields')
       return
     }
+
+    let sellAmountWei: bigint
+    try {
+      sellAmountWei = parseUnits(sellAmount, sellToken.decimals)
+    } catch {
+      alert(`Enter a valid ${sellToken.symbol} amount.`)
+      return
+    }
+
+    if (sellAmountWei <= ZERO) {
+      alert('Enter an amount greater than zero.')
+      return
+    }
+
+    // Catch this here rather than letting the wallet reject it with an
+    // opaque RPC error after the user has already approved.
+    if (sellBalanceWei !== null && sellAmountWei > sellBalanceWei) {
+      alert(
+        `Amount exceeds your balance of ` +
+        `${formatBalance(sellBalanceWei, sellToken.decimals)} ${sellToken.symbol}.`
+      )
+      return
+    }
+
     setSwapping(true)
     try {
-      const sellAmountWei = parseUnits(sellAmount, sellToken.decimals).toString()
-      const sellAddr = sellToken.symbol === 'ETH'
-        ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-        : sellToken.address
-      const buyAddr = buyToken.symbol === 'ETH'
-        ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-        : buyToken.address
+      const sellAddr = isNativeToken(sellToken) ? NATIVE_SENTINEL : sellToken.address
+      const buyAddr = isNativeToken(buyToken) ? NATIVE_SENTINEL : buyToken.address
 
       const quote = await getSwapQuote({
         sellToken: sellAddr,
         buyToken: buyAddr,
-        sellAmount: sellAmountWei,
+        sellAmount: sellAmountWei.toString(),
         taker: address,
       })
 
@@ -235,7 +392,7 @@ function DEXApp() {
         return
       }
 
-      const ethereum = (window as any).ethereum
+      const ethereum = getProvider()
       if (!ethereum) {
         alert('No wallet found. Please install MetaMask or Coinbase Wallet.')
         setSwapping(false)
@@ -307,15 +464,7 @@ function DEXApp() {
 
         {!address ? (
           <button
-            onClick={async () => {
-              const ethereum = (window as any).ethereum
-              if (ethereum) {
-                const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
-                setAddress(accounts[0])
-              } else {
-                alert('No wallet found. Please install MetaMask or Coinbase Wallet.')
-              }
-            }}
+            onClick={() => setShowWallets(true)}
             style={{
               background: '#3b0764', color: 'white', border: 'none',
               borderRadius: '20px', padding: '10px 20px',
@@ -330,7 +479,7 @@ function DEXApp() {
               {address.slice(0, 6)}...{address.slice(-4)}
             </span>
             <button
-              onClick={() => setAddress('')}
+              onClick={() => { clearActiveWallet(); setAddress('') }}
               style={{
                 background: '#ede9fe', border: 'none', borderRadius: '10px',
                 padding: '6px 12px', fontSize: '12px', color: '#6d28d9',
@@ -353,15 +502,23 @@ function DEXApp() {
           <>
             {/* Side buttons — unchanged */}
 
+            {/* Centering wrapper: the card kept its centered position, the
+                route panel sits beside it and wraps on narrow screens. */}
+            <div style={{
+              position: 'absolute',
+              top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              display: 'flex', alignItems: 'flex-start',
+              justifyContent: 'center', gap: '16px',
+              flexWrap: 'wrap', width: 'min(1180px, calc(100% - 48px))',
+            }}>
+
             {/* Swap card — dark UI */}
             <div style={{
               width: '100%', maxWidth: '440px',
               background: '#f0eeff', borderRadius: '24px', padding: '20px',
               boxShadow: '0 4px 32px rgba(0,0,0,0.3)',
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
+              flexShrink: 0,
             }}>
 
               {/* Card header */}
@@ -417,25 +574,39 @@ function DEXApp() {
 
                   {/* % shortcuts */}
                   <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                    {['25%', '50%', '75%', '100%'].map(p => (
-                      <button key={p}
-                        onClick={() => {
-                          setSellAmount((parseFloat(p) / 100).toFixed(4))
-                        }}
-                        style={{
-                          padding: '3px 8px', borderRadius: '6px', fontSize: '11px',
-                          background: '#ede9fe', border: '1px solid #ede9fe',
-                          color: '#1e1b4b', cursor: 'pointer', fontWeight: '600',
-                        }}
-                      >{p}</button>
-                    ))}
+                    {['25%', '50%', '75%', '100%'].map(p => {
+                      const usable = sellBalanceWei !== null && sellBalanceWei > ZERO
+                      return (
+                        <button key={p}
+                          onClick={() => applyPercent(parseFloat(p))}
+                          disabled={!usable}
+                          title={usable ? `${p} of your ${sellToken?.symbol ?? ''} balance` : 'No balance available'}
+                          style={{
+                            padding: '3px 8px', borderRadius: '6px', fontSize: '11px',
+                            background: '#ede9fe', border: '1px solid #ede9fe',
+                            color: '#1e1b4b', cursor: usable ? 'pointer' : 'not-allowed',
+                            fontWeight: '600', opacity: usable ? 1 : 0.45,
+                          }}
+                        >{p}</button>
+                      )
+                    })}
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '12px', color: '#8b8fa8' }}>
                       {sellAmount && rate ? `~$${(parseFloat(sellAmount) * (parseFloat(buyAmount) / parseFloat(sellAmount))).toFixed(2)}` : '$0.00'}
                     </span>
-                    <span style={{ fontSize: '12px', color: '#6b7280' }}>Balance: {sellBalance} {sellToken?.symbol}</span>
+                    <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                      {!address
+                        ? 'Balance: —'
+                        : balanceState === 'loading'
+                          ? 'Balance: ...'
+                          : balanceState === 'error'
+                            ? 'Balance: unavailable'
+                            : `Balance: ${sellBalanceWei !== null && sellToken
+                              ? formatBalance(sellBalanceWei, sellToken.decimals)
+                              : '0'} ${sellToken?.symbol ?? ''}`}
+                    </span>
                   </div>
 
                   {/* Sell dropdown */}
@@ -600,15 +771,7 @@ function DEXApp() {
                 {!address ? (
                   <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                     <button
-                      onClick={async () => {
-                        const ethereum = (window as any).ethereum
-                        if (ethereum) {
-                          const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
-                          setAddress(accounts[0])
-                        } else {
-                          alert('No wallet found. Please install MetaMask or Coinbase Wallet.')
-                        }
-                      }}
+                      onClick={() => setShowWallets(true)}
                       style={{
                         flex: 1, padding: '16px', borderRadius: '14px',
                         background: '#3b0764', color: 'white',
@@ -646,6 +809,18 @@ function DEXApp() {
               </div>
 
             </div>
+
+            <RouteDetails
+              quote={quote}
+              sellToken={sellToken}
+              buyToken={buyToken}
+              sellAmount={sellAmount}
+              loading={loading}
+              error={quoteError}
+              ethUsd={ethUsd}
+            />
+
+            </div>
           </>
         )}
 
@@ -671,13 +846,7 @@ function DEXApp() {
                     Connect your wallet to view your portfolio
                   </p>
                   <button
-                    onClick={async () => {
-                      const ethereum = (window as any).ethereum
-                      if (ethereum) {
-                        const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
-                        setAddress(accounts[0])
-                      }
-                    }}
+                    onClick={() => setShowWallets(true)}
                     style={{
                       background: '#3b0764', color: 'white', border: 'none',
                       borderRadius: '20px', padding: '10px 24px',
@@ -762,6 +931,16 @@ function DEXApp() {
           </div>
         )}
       </div>
+
+      <WalletModal
+        open={showWallets}
+        onClose={() => setShowWallets(false)}
+        onConnect={addr => {
+          setAddress(addr)
+          setWalletVersion(v => v + 1)
+        }}
+      />
+
       {showSuccess && (
         <div
           style={{
