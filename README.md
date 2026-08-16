@@ -51,3 +51,15 @@ npm run dev
 
 Open [localhost:3000](http://localhost:3000).
 
+---
+
+## Deployed on
+
+- Vercel 
+- Base mainnet
+- Farcaster Mini App
+
+---
+
+Built by [@isbburger](https://x.com/isbburger)
+
