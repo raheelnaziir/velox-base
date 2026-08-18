@@ -190,6 +190,34 @@ export function useWallets(): DiscoveredWallet[] {
 }
 
 /* ------------------------------------------------------------------ *
+ * "The user hit cancel" detection
+ *
+ * Every wallet spells this differently: MetaMask throws EIP-1193's 4001,
+ * ethers-based wallets throw ACTION_REJECTED, WalletConnect throws 5000,
+ * and a few only say so in the message — often wrapped a layer or two deep
+ * inside a generic -32603, so we walk the error chain instead of reading
+ * only the top level.
+ * ------------------------------------------------------------------ */
+
+const REJECTION_CODES = new Set(['4001', '5000', 'ACTION_REJECTED'])
+
+const REJECTION_TEXT =
+  /(user|owner|account)\s+(rejected|denied|cancell?ed|refused)|(rejected|denied|cancell?ed)\s+by\s+(the\s+)?user|user\s+(closed|dismissed|aborted)|request\s+rejected|rejected\s+the\s+request/i
+
+/** True when a wallet error means "the user declined", not "something broke". */
+export function isUserRejection(error: unknown): boolean {
+  let node: any = error
+  // Bounded so a self-referencing cause chain can't spin forever.
+  for (let depth = 0; node != null && depth < 5; depth++) {
+    if (typeof node === 'string') return REJECTION_TEXT.test(node)
+    if (node.code != null && REJECTION_CODES.has(String(node.code).toUpperCase())) return true
+    if (typeof node.message === 'string' && REJECTION_TEXT.test(node.message)) return true
+    node = node.cause ?? node.error ?? node.data ?? node.info
+  }
+  return false
+}
+
+/* ------------------------------------------------------------------ *
  * Wallet picker modal
  * ------------------------------------------------------------------ */
 
@@ -265,8 +293,8 @@ export function WalletModal({
       onClose()
     } catch (e: any) {
       setError(
-        e?.code === 4001
-          ? 'Connection request rejected.'
+        isUserRejection(e)
+          ? `You rejected the connection request in ${wallet.info.name}. Nothing was shared.`
           : e?.message || 'Could not connect. Please try again.'
       )
     }

@@ -20,6 +20,7 @@ import {
   getProvider,
   restoreSavedProvider,
   clearActiveWallet,
+  isUserRejection,
 } from './wallet'
 
 const ETH = {
@@ -124,6 +125,11 @@ function formatUsdValue(value: number | null | undefined): string {
 
 type Tab = 'swap' | 'portfolio'
 
+/** A rejection isn't a failure — the user chose it — so it reads as a notice
+ *  rather than an error, and never lands in the console. `key` pins it to the
+ *  attempt that raised it. */
+type SwapNotice = { kind: 'rejected' | 'error'; text: string; key: string }
+
 function DEXApp() {
   const [tab, setTab] = useState<Tab>('swap')
   const [tokens, setTokens] = useState<Token[]>([])
@@ -135,6 +141,7 @@ function DEXApp() {
   const [rate, setRate] = useState('')
   const [address, setAddress] = useState<string>('')
   const [swapping, setSwapping] = useState(false)
+  const [swapNotice, setSwapNotice] = useState<SwapNotice | null>(null)
   const [txHash, setTxHash] = useState('')
   const [open1, setOpen1] = useState(false)
   const [open2, setOpen2] = useState(false)
@@ -392,10 +399,26 @@ function DEXApp() {
     setSellAmount(formatUnits(amount, sellToken.decimals))
   }, [sellToken, sellBalanceWei])
 
+  // A notice belongs to one specific attempt. Rather than clearing it from an
+  // effect when the inputs change, it carries the attempt it was raised for
+  // and simply stops rendering once that no longer matches.
+  const attemptKey = [
+    address,
+    sellToken ? `${sellToken.symbol}:${sellToken.address}` : '',
+    buyToken ? `${buyToken.symbol}:${buyToken.address}` : '',
+    sellAmount,
+  ].join('|')
+  const visibleNotice = swapNotice?.key === attemptKey ? swapNotice : null
+
   const handleSwap = async () => {
 
+    const notify = (kind: SwapNotice['kind'], text: string) =>
+      setSwapNotice({ kind, text, key: attemptKey })
+
+    setSwapNotice(null)
+
     if (!sellToken || !buyToken || !sellAmount) {
-      alert('Please fill in all fields')
+      notify('error', 'Pick both tokens and enter an amount to swap.')
       return
     }
 
@@ -403,24 +426,29 @@ function DEXApp() {
     try {
       sellAmountWei = parseUnits(sellAmount, sellToken.decimals)
     } catch {
-      alert(`Enter a valid ${sellToken.symbol} amount.`)
+      notify('error', `Enter a valid ${sellToken.symbol} amount.`)
       return
     }
 
     if (sellAmountWei <= ZERO) {
-      alert('Enter an amount greater than zero.')
+      notify('error', 'Enter an amount greater than zero.')
       return
     }
 
     // Catch this here rather than letting the wallet reject it with an
     // opaque RPC error after the user has already approved.
     if (sellBalanceWei !== null && sellAmountWei > sellBalanceWei) {
-      alert(
+      notify(
+        'error',
         `Amount exceeds your balance of ` +
         `${formatBalance(sellBalanceWei, sellToken.decimals)} ${sellToken.symbol}.`
       )
       return
     }
+
+    // Which wallet prompt was open when it threw, so a rejection can name
+    // what was actually declined.
+    let stage: 'connect' | 'sign' = 'connect'
 
     setSwapping(true)
     try {
@@ -435,14 +463,14 @@ function DEXApp() {
       })
 
       if (!quote.transaction) {
-        alert('Could not get swap transaction. Try again.')
+        notify('error', 'Could not build the swap transaction. Please try again.')
         setSwapping(false)
         return
       }
 
       const ethereum = getProvider()
       if (!ethereum) {
-        alert('No wallet found. Please install MetaMask or Coinbase Wallet.')
+        notify('error', 'No wallet found. Install MetaMask or Coinbase Wallet to swap.')
         setSwapping(false)
         return
       }
@@ -450,6 +478,7 @@ function DEXApp() {
       const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
       const from = accounts[0]
 
+      stage = 'sign'
       const hash = await ethereum.request({
         method: 'eth_sendTransaction',
         params: [{
@@ -468,8 +497,17 @@ function DEXApp() {
       setTxHash(hash)
       setShowSuccess(true)
     } catch (e: any) {
-      console.error(e)
-      alert(e.message || 'Swap failed')
+      if (isUserRejection(e)) {
+        notify(
+          'rejected',
+          stage === 'connect'
+            ? 'You rejected the connection request in your wallet, so the swap was never submitted.'
+            : 'You rejected the transaction in your wallet. Nothing was submitted and your funds are untouched.'
+        )
+      } else {
+        console.error(e)
+        notify('error', e?.message || 'Swap failed. Please try again.')
+      }
     }
     setSwapping(false)
   }
@@ -855,6 +893,45 @@ function DEXApp() {
                   >
                     {swapping ? 'Swapping...' : loading ? 'Getting quote...' : `Swap ${sellToken?.symbol || ''} → ${buyToken?.symbol || ''}`}
                   </button>
+                )}
+
+                {/* Rejections and failures land here rather than in a browser
+                    alert, so the message sits next to the button that caused it. */}
+                {visibleNotice && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    style={{
+                      display: 'flex', alignItems: 'flex-start', gap: '10px',
+                      marginTop: '8px', padding: '12px 14px', borderRadius: '14px',
+                      background: visibleNotice.kind === 'rejected' ? '#fffbeb' : '#fef2f2',
+                      border: `1px solid ${visibleNotice.kind === 'rejected' ? '#fde68a' : '#fee2e2'}`,
+                      color: visibleNotice.kind === 'rejected' ? '#92400e' : '#b91c1c',
+                    }}
+                  >
+                    <span style={{ fontSize: '15px', lineHeight: 1.3, flexShrink: 0 }}>
+                      {visibleNotice.kind === 'rejected' ? '✋' : '⚠️'}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '2px' }}>
+                        {visibleNotice.kind === 'rejected' ? 'Request rejected' : 'Swap failed'}
+                      </div>
+                      <div style={{ fontSize: '12px', lineHeight: 1.5, wordBreak: 'break-word' }}>
+                        {visibleNotice.text}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setSwapNotice(null)}
+                      aria-label="Dismiss"
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        padding: 0, fontSize: '13px', lineHeight: 1,
+                        color: 'inherit', opacity: 0.6, flexShrink: 0,
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
                 )}
 
 
