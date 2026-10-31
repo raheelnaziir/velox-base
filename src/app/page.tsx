@@ -23,6 +23,9 @@ import {
   isUserRejection,
 } from './wallet'
 
+// Base Builder Code as an ERC-8021 suffix (no 0x prefix)
+const BUILDER_SUFFIX = '0x62635f737962336865616f0b0080218021802180218021802180218021'
+
 const ETH = {
   name: 'Ethereum',
   address: '' as `0x${string}`,
@@ -546,7 +549,7 @@ function DEXApp() {
         params: [{
           from,
           to: quote.transaction.to,
-          data: quote.transaction.data,
+          data: quote.transaction.data + BUILDER_SUFFIX,
           value: quote.transaction.value
             ? '0x' + BigInt(quote.transaction.value).toString(16)
             : '0x0',

@@ -30,7 +30,6 @@ export async function GET(req: NextRequest) {
                 headers: {
                     '0x-api-key': process.env.ZERO_X_API_KEY!,
                     '0x-version': 'v2',
-                    '0x-builder-code': 'bc_syb3heao',
                 },
                 cache: 'no-store',
             }
