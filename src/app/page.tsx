@@ -181,6 +181,9 @@ function DEXApp() {
         const ethereum = getProvider()
         if (!ethereum) throw new Error('No wallet provider available')
 
+        const chainId = await ethereum.request({ method: 'eth_chainId' })
+        if (chainId !== '0x2105') { setSellBalanceWei(null); return }
+
         let wei: bigint
         if (isNativeToken(sellToken)) {
           const bal = await ethereum.request({
@@ -478,6 +481,28 @@ function DEXApp() {
       const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
       const from = accounts[0]
 
+      try {
+        await ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x2105' }],
+        })
+      } catch (switchErr: any) {
+        if (switchErr.code === 4902) {
+          await ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: '0x2105',
+              chainName: 'Base',
+              nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+              rpcUrls: ['https://mainnet.base.org'],
+              blockExplorerUrls: ['https://basescan.org'],
+            }],
+          })
+        } else {
+          throw switchErr
+        }
+      }
+
       stage = 'sign'
       const hash = await ethereum.request({
         method: 'eth_sendTransaction',
@@ -604,355 +629,355 @@ function DEXApp() {
               flexWrap: 'wrap', width: 'min(1180px, calc(100% - 48px))',
             }}>
 
-            {/* Swap card — dark UI */}
-            <div style={{
-              width: '100%', maxWidth: '440px',
-              background: '#f0eeff', borderRadius: '24px', padding: '20px',
-              boxShadow: '0 4px 32px rgba(0,0,0,0.3)',
-              flexShrink: 0,
-            }}>
-
-              {/* Card header */}
+              {/* Swap card — dark UI */}
               <div style={{
-                display: 'flex', justifyContent: 'space-between',
-                alignItems: 'center', marginBottom: '16px',
+                width: '100%', maxWidth: '440px',
+                background: '#f0eeff', borderRadius: '24px', padding: '20px',
+                boxShadow: '0 4px 32px rgba(0,0,0,0.3)',
+                flexShrink: 0,
               }}>
 
-                <b><h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1e1b4b', margin: 0 }}>
-                  Swap & Bridge
-                </h2></b>
+                {/* Card header */}
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between',
+                  alignItems: 'center', marginBottom: '16px',
+                }}>
 
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' }}></button>
-              </div>
+                  <b><h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1e1b4b', margin: 0 }}>
+                    Swap & Bridge
+                  </h2></b>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' }}></button>
+                </div>
 
-                {/* Sell box */}
-                <div style={{ background: '#e8e4ff', borderRadius: '16px', padding: '16px', position: 'relative' }} onClick={e => e.stopPropagation()}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <span style={{ fontSize: '13px', color: '#12131f', fontWeight: '600' }}><b>Sell</b></span>
-                    <button
-                      onClick={() => { setOpen1(!open1); setOpen2(false) }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        background: 'white', border: '1px solid #ede9fe',
-                        borderRadius: '20px', padding: '6px 12px',
-                        cursor: 'pointer', color: '#1e1b4b', fontWeight: '600', fontSize: '14px',
-                      }}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
 
-                    >
-                      {sellToken?.image && (
-                        <img src={sellToken.image} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%' }}
-                          onError={e => (e.currentTarget.style.display = 'none')} />
-                      )}
-                      {sellToken?.symbol || 'Select'}
-                      <span style={{ fontSize: '10px', color: '#6b7280' }}>▼</span>
-                    </button>
-                  </div>
+                  {/* Sell box */}
+                  <div style={{ background: '#e8e4ff', borderRadius: '16px', padding: '16px', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '13px', color: '#12131f', fontWeight: '600' }}><b>Sell</b></span>
+                      <button
+                        onClick={() => { setOpen1(!open1); setOpen2(false) }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '8px',
+                          background: 'white', border: '1px solid #ede9fe',
+                          borderRadius: '20px', padding: '6px 12px',
+                          cursor: 'pointer', color: '#1e1b4b', fontWeight: '600', fontSize: '14px',
+                        }}
 
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={sellAmount}
-                    onChange={e => setSellAmount(e.target.value)}
-                    onWheel={e => e.currentTarget.blur()}
-                    style={{
-                      background: 'transparent', border: 'none', outline: 'none',
-                      fontSize: '36px', fontWeight: '700', color: '#1e1b4b',
-                      width: '100%', marginBottom: '10px',
-                    }}
-                  />
-
-                  {/* % shortcuts */}
-                  <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                    {['25%', '50%', '75%', '100%'].map(p => {
-                      const usable = sellBalanceWei !== null && sellBalanceWei > ZERO
-                      return (
-                        <button key={p}
-                          onClick={() => applyPercent(parseFloat(p))}
-                          disabled={!usable}
-                          title={usable ? `${p} of your ${sellToken?.symbol ?? ''} balance` : 'No balance available'}
-                          style={{
-                            padding: '3px 8px', borderRadius: '6px', fontSize: '11px',
-                            background: '#ede9fe', border: '1px solid #ede9fe',
-                            color: '#1e1b4b', cursor: usable ? 'pointer' : 'not-allowed',
-                            fontWeight: '600', opacity: usable ? 1 : 0.45,
-                          }}
-                        >{p}</button>
-                      )
-                    })}
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '12px', color: '#8b8fa8' }}>
-                      {sellAmount && rate ? `~$${(parseFloat(sellAmount) * (parseFloat(buyAmount) / parseFloat(sellAmount))).toFixed(2)}` : '$0.00'}
-                    </span>
-                    <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                      {!address
-                        ? 'Balance: —'
-                        : balanceState === 'loading'
-                          ? 'Balance: ...'
-                          : balanceState === 'error'
-                            ? 'Balance: unavailable'
-                            : `Balance: ${sellBalanceWei !== null && sellToken
-                              ? formatBalance(sellBalanceWei, sellToken.decimals)
-                              : '0'} ${sellToken?.symbol ?? ''}`}
-                    </span>
-                  </div>
-
-                  {/* Sell dropdown */}
-                  {open1 && (
-                    <div style={{
-                      position: 'absolute', top: '40px', right: 0, left: 'auto', zIndex: 200, width: '300px',
-                      background: '#ede9fe', borderRadius: '16px',
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                      border: '1px solid #ede9fe',
-                      maxHeight: '320px', overflow: 'hidden',
-                      display: 'flex', flexDirection: 'column', marginTop: '8px',
-                    }}>
-                      <div style={{ padding: '12px' }}>
-                        <input autoFocus type="text" placeholder="Search token..."
-                          value={search1} onChange={e => setSearch1(e.target.value)}
-                          style={{
-                            width: '100%', padding: '10px 12px', borderRadius: '10px',
-                            background: '#f5f3ff', border: '1px solid #ede9fe',
-                            color: '#1e1b4b', fontSize: '14px', outline: 'none',
-                            boxSizing: 'border-box' as const,
-                          }} />
-                      </div>
-                      <div style={{ overflowY: 'auto' as const, flex: 1 }}>
-                        {tokens.filter(t =>
-                          t.symbol.toLowerCase().includes(search1.toLowerCase()) ||
-                          t.name.toLowerCase().includes(search1.toLowerCase())
-                        ).slice(0, 50).map((t, i) => (
-                          <div key={i}
-                            onClick={() => { setSellToken(t); setOpen1(false); setSearch1('') }}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: '10px',
-                              padding: '10px 14px', cursor: 'pointer', color: '#1e1b4b',
-                            }}
-                            onMouseOver={e => (e.currentTarget.style.background = '#ede9fe')}
-                            onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
-                          >
-                            {t.image ? (
-                              <img src={t.image} alt="" style={{ width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0 }}
-                                onError={e => (e.currentTarget.style.display = 'none')} />
-                            ) : (
-                              <div style={{
-                                width: '28px', height: '28px', borderRadius: '50%', background: '#2d2f4a',
-                                flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '10px', fontWeight: '700', color: '#8b8fa8',
-                              }}>{t.symbol.slice(0, 2)}</div>
-                            )}
-                            <div>
-                              <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b' }}>{t.symbol}</div>
-                              <div style={{ fontSize: '11px', color: '#6b7280' }}>{t.name.slice(0, 24)}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      >
+                        {sellToken?.image && (
+                          <img src={sellToken.image} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%' }}
+                            onError={e => (e.currentTarget.style.display = 'none')} />
+                        )}
+                        {sellToken?.symbol || 'Select'}
+                        <span style={{ fontSize: '10px', color: '#6b7280' }}>▼</span>
+                      </button>
                     </div>
-                  )}
-                </div>
 
-                {/* Toggle button */}
-                <div style={{ display: 'flex', justifyContent: 'center', margin: '-2px 0', zIndex: 1 }}>
-                  <button
-                    onClick={() => {
-                      const s = sellToken; setSellToken(buyToken); setBuyToken(s)
-                      setSellAmount(''); setBuyAmount('')
-                    }}
-                    style={{
-                      width: '36px', height: '36px', borderRadius: '50%',
-                      background: '#1a1b2e', border: '2px solid #2d2f4a',
-                      cursor: 'pointer', color: 'white', fontSize: '16px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>↓</button>
-                </div>
-
-                {/* Buy box */}
-                <div style={{ background: '#e8e4ff', borderRadius: '16px', padding: '16px', position: 'relative' }} onClick={e => e.stopPropagation()}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <span style={{ fontSize: '13px', color: '#12131f', fontWeight: '600' }}><b>Buy</b></span>
-                    <button
-                      onClick={() => { setOpen2(!open2); setOpen1(false) }}
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={sellAmount}
+                      onChange={e => setSellAmount(e.target.value)}
+                      onWheel={e => e.currentTarget.blur()}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        background: 'white', border: '1px solid #ede9fe',
-                        borderRadius: '20px', padding: '6px 12px',
-                        cursor: 'pointer', color: '#1e1b4b', fontWeight: '600', fontSize: '14px',
+                        background: 'transparent', border: 'none', outline: 'none',
+                        fontSize: '36px', fontWeight: '700', color: '#1e1b4b',
+                        width: '100%', marginBottom: '10px',
                       }}
-                    >
-                      {buyToken?.image && (
-                        <img src={buyToken.image} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%' }}
-                          onError={e => (e.currentTarget.style.display = 'none')} />
-                      )}
-                      {buyToken?.symbol || 'Select'}
-                      <span style={{ fontSize: '10px', color: '#8b8fa8' }}>▼</span>
-                    </button>
-                  </div>
+                    />
 
-                  <div style={{ fontSize: '36px', fontWeight: '700', color: loading ? '#6b7280' : '#1e1b4b', marginBottom: '8px' }}>
-                    {loading ? 'Loading...' : (buyAmount || '0')}
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '12px', color: '#8b8fa8' }}>
-                      {buyAmount && buyAmount !== '—' ? `~$${(parseFloat(buyAmount)).toFixed(2)}` : '$0.00'}
-                    </span>
-                    <span style={{ fontSize: '12px', color: rate.includes('Unable') ? '#1e1b4b' : '#1e1b4b' }}>{rate}</span>
-                  </div>
-
-                  {/* Buy dropdown */}
-                  {open2 && (
-                    <div style={{
-                      position: 'absolute', top: '40px', left: 'auto', right: 0, zIndex: 200, width: '300px',
-                      background: '#ede9fe', borderRadius: '16px',
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                      border: '1px solid #ede9fe',
-                      maxHeight: '320px', overflow: 'hidden',
-                      display: 'flex', flexDirection: 'column', marginTop: '8px',
-                    }}>
-                      <div style={{ padding: '12px' }}>
-                        <input autoFocus type="text" placeholder="Search token..."
-                          value={search2} onChange={e => setSearch2(e.target.value)}
-                          style={{
-                            width: '100%', padding: '10px 12px', borderRadius: '10px',
-                            background: '#f5f3ff', border: '1px solid #ede9fe',
-                            color: '#1e1b4b', fontSize: '14px', outline: 'none',
-                            boxSizing: 'border-box' as const,
-                          }} />
-                      </div>
-                      <div style={{ overflowY: 'auto' as const, flex: 1 }}>
-                        {tokens.filter(t =>
-                          t.symbol.toLowerCase().includes(search2.toLowerCase()) ||
-                          t.name.toLowerCase().includes(search2.toLowerCase())
-                        ).slice(0, 50).map((t, i) => (
-                          <div key={i}
-                            onClick={() => { setBuyToken(t); setOpen2(false); setSearch2('') }}
+                    {/* % shortcuts */}
+                    <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                      {['25%', '50%', '75%', '100%'].map(p => {
+                        const usable = sellBalanceWei !== null && sellBalanceWei > ZERO
+                        return (
+                          <button key={p}
+                            onClick={() => applyPercent(parseFloat(p))}
+                            disabled={!usable}
+                            title={usable ? `${p} of your ${sellToken?.symbol ?? ''} balance` : 'No balance available'}
                             style={{
-                              display: 'flex', alignItems: 'center', gap: '10px',
-                              padding: '10px 14px', cursor: 'pointer', color: '#1e1b4b',
+                              padding: '3px 8px', borderRadius: '6px', fontSize: '11px',
+                              background: '#ede9fe', border: '1px solid #ede9fe',
+                              color: '#1e1b4b', cursor: usable ? 'pointer' : 'not-allowed',
+                              fontWeight: '600', opacity: usable ? 1 : 0.45,
                             }}
-                            onMouseOver={e => (e.currentTarget.style.background = '#ede9fe')}
-                            onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
-                          >
-                            {t.image ? (
-                              <img src={t.image} alt="" style={{ width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0 }}
-                                onError={e => (e.currentTarget.style.display = 'none')} />
-                            ) : (
-                              <div style={{
-                                width: '28px', height: '28px', borderRadius: '50%', background: '#2d2f4a',
-                                flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '10px', fontWeight: '700', color: '#8b8fa8',
-                              }}>{t.symbol.slice(0, 2)}</div>
-                            )}
-                            <div>
-                              <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b' }}>{t.symbol}</div>
-                              <div style={{ fontSize: '11px', color: '#6b7280' }}>{t.name.slice(0, 24)}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                          >{p}</button>
+                        )
+                      })}
                     </div>
-                  )}
-                </div>
 
-                {/* Swap button */}
-                {!address ? (
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: '#8b8fa8' }}>
+                        {sellAmount && rate ? `~$${(parseFloat(sellAmount) * (parseFloat(buyAmount) / parseFloat(sellAmount))).toFixed(2)}` : '$0.00'}
+                      </span>
+                      <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                        {!address
+                          ? 'Balance: —'
+                          : balanceState === 'loading'
+                            ? 'Balance: ...'
+                            : balanceState === 'error'
+                              ? 'Balance: unavailable'
+                              : `Balance: ${sellBalanceWei !== null && sellToken
+                                ? formatBalance(sellBalanceWei, sellToken.decimals)
+                                : '0'} ${sellToken?.symbol ?? ''}`}
+                      </span>
+                    </div>
+
+                    {/* Sell dropdown */}
+                    {open1 && (
+                      <div style={{
+                        position: 'absolute', top: '40px', right: 0, left: 'auto', zIndex: 200, width: '300px',
+                        background: '#ede9fe', borderRadius: '16px',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                        border: '1px solid #ede9fe',
+                        maxHeight: '320px', overflow: 'hidden',
+                        display: 'flex', flexDirection: 'column', marginTop: '8px',
+                      }}>
+                        <div style={{ padding: '12px' }}>
+                          <input autoFocus type="text" placeholder="Search token..."
+                            value={search1} onChange={e => setSearch1(e.target.value)}
+                            style={{
+                              width: '100%', padding: '10px 12px', borderRadius: '10px',
+                              background: '#f5f3ff', border: '1px solid #ede9fe',
+                              color: '#1e1b4b', fontSize: '14px', outline: 'none',
+                              boxSizing: 'border-box' as const,
+                            }} />
+                        </div>
+                        <div style={{ overflowY: 'auto' as const, flex: 1 }}>
+                          {tokens.filter(t =>
+                            t.symbol.toLowerCase().includes(search1.toLowerCase()) ||
+                            t.name.toLowerCase().includes(search1.toLowerCase())
+                          ).slice(0, 50).map((t, i) => (
+                            <div key={i}
+                              onClick={() => { setSellToken(t); setOpen1(false); setSearch1('') }}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '10px',
+                                padding: '10px 14px', cursor: 'pointer', color: '#1e1b4b',
+                              }}
+                              onMouseOver={e => (e.currentTarget.style.background = '#ede9fe')}
+                              onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
+                            >
+                              {t.image ? (
+                                <img src={t.image} alt="" style={{ width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0 }}
+                                  onError={e => (e.currentTarget.style.display = 'none')} />
+                              ) : (
+                                <div style={{
+                                  width: '28px', height: '28px', borderRadius: '50%', background: '#2d2f4a',
+                                  flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: '10px', fontWeight: '700', color: '#8b8fa8',
+                                }}>{t.symbol.slice(0, 2)}</div>
+                              )}
+                              <div>
+                                <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b' }}>{t.symbol}</div>
+                                <div style={{ fontSize: '11px', color: '#6b7280' }}>{t.name.slice(0, 24)}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Toggle button */}
+                  <div style={{ display: 'flex', justifyContent: 'center', margin: '-2px 0', zIndex: 1 }}>
                     <button
-                      onClick={() => setShowWallets(true)}
+                      onClick={() => {
+                        const s = sellToken; setSellToken(buyToken); setBuyToken(s)
+                        setSellAmount(''); setBuyAmount('')
+                      }}
                       style={{
-                        flex: 1, padding: '16px', borderRadius: '14px',
-                        background: '#3b0764', color: 'white',
-                        border: 'none', fontSize: '16px', fontWeight: '600',
-                        cursor: 'pointer',
+                        width: '36px', height: '36px', borderRadius: '50%',
+                        background: '#1a1b2e', border: '2px solid #2d2f4a',
+                        cursor: 'pointer', color: 'white', fontSize: '16px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>↓</button>
+                  </div>
+
+                  {/* Buy box */}
+                  <div style={{ background: '#e8e4ff', borderRadius: '16px', padding: '16px', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '13px', color: '#12131f', fontWeight: '600' }}><b>Buy</b></span>
+                      <button
+                        onClick={() => { setOpen2(!open2); setOpen1(false) }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '8px',
+                          background: 'white', border: '1px solid #ede9fe',
+                          borderRadius: '20px', padding: '6px 12px',
+                          cursor: 'pointer', color: '#1e1b4b', fontWeight: '600', fontSize: '14px',
+                        }}
+                      >
+                        {buyToken?.image && (
+                          <img src={buyToken.image} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%' }}
+                            onError={e => (e.currentTarget.style.display = 'none')} />
+                        )}
+                        {buyToken?.symbol || 'Select'}
+                        <span style={{ fontSize: '10px', color: '#8b8fa8' }}>▼</span>
+                      </button>
+                    </div>
+
+                    <div style={{ fontSize: '36px', fontWeight: '700', color: loading ? '#6b7280' : '#1e1b4b', marginBottom: '8px' }}>
+                      {loading ? 'Loading...' : (buyAmount || '0')}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: '#8b8fa8' }}>
+                        {buyAmount && buyAmount !== '—' ? `~$${(parseFloat(buyAmount)).toFixed(2)}` : '$0.00'}
+                      </span>
+                      <span style={{ fontSize: '12px', color: rate.includes('Unable') ? '#1e1b4b' : '#1e1b4b' }}>{rate}</span>
+                    </div>
+
+                    {/* Buy dropdown */}
+                    {open2 && (
+                      <div style={{
+                        position: 'absolute', top: '40px', left: 'auto', right: 0, zIndex: 200, width: '300px',
+                        background: '#ede9fe', borderRadius: '16px',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                        border: '1px solid #ede9fe',
+                        maxHeight: '320px', overflow: 'hidden',
+                        display: 'flex', flexDirection: 'column', marginTop: '8px',
+                      }}>
+                        <div style={{ padding: '12px' }}>
+                          <input autoFocus type="text" placeholder="Search token..."
+                            value={search2} onChange={e => setSearch2(e.target.value)}
+                            style={{
+                              width: '100%', padding: '10px 12px', borderRadius: '10px',
+                              background: '#f5f3ff', border: '1px solid #ede9fe',
+                              color: '#1e1b4b', fontSize: '14px', outline: 'none',
+                              boxSizing: 'border-box' as const,
+                            }} />
+                        </div>
+                        <div style={{ overflowY: 'auto' as const, flex: 1 }}>
+                          {tokens.filter(t =>
+                            t.symbol.toLowerCase().includes(search2.toLowerCase()) ||
+                            t.name.toLowerCase().includes(search2.toLowerCase())
+                          ).slice(0, 50).map((t, i) => (
+                            <div key={i}
+                              onClick={() => { setBuyToken(t); setOpen2(false); setSearch2('') }}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '10px',
+                                padding: '10px 14px', cursor: 'pointer', color: '#1e1b4b',
+                              }}
+                              onMouseOver={e => (e.currentTarget.style.background = '#ede9fe')}
+                              onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
+                            >
+                              {t.image ? (
+                                <img src={t.image} alt="" style={{ width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0 }}
+                                  onError={e => (e.currentTarget.style.display = 'none')} />
+                              ) : (
+                                <div style={{
+                                  width: '28px', height: '28px', borderRadius: '50%', background: '#2d2f4a',
+                                  flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: '10px', fontWeight: '700', color: '#8b8fa8',
+                                }}>{t.symbol.slice(0, 2)}</div>
+                              )}
+                              <div>
+                                <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e1b4b' }}>{t.symbol}</div>
+                                <div style={{ fontSize: '11px', color: '#6b7280' }}>{t.name.slice(0, 24)}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Swap button */}
+                  {!address ? (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <button
+                        onClick={() => setShowWallets(true)}
+                        style={{
+                          flex: 1, padding: '16px', borderRadius: '14px',
+                          background: '#3b0764', color: 'white',
+                          border: 'none', fontSize: '16px', fontWeight: '600',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Connect wallet
+                      </button>
+                      <button style={{
+                        width: '52px', height: '52px', borderRadius: '14px',
+                        background: '#ede9fe', border: 'none', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '20px',
+                      }}>💳</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleSwap}
+                      disabled={!sellAmount || !sellToken || !buyToken || swapping}
+                      style={{
+                        width: '100%', padding: '16px', borderRadius: '14px', marginTop: '8px',
+                        background: !sellAmount ? '#ede9fe' : '#3b0764',
+                        color: !sellAmount ? '#8b8fa8' : 'white',
+                        border: 'none', fontSize: '16px', fontWeight: '700',
+                        cursor: !sellAmount ? 'not-allowed' : 'pointer',
                       }}
                     >
-                      Connect wallet
+                      {swapping ? 'Swapping...' : loading ? 'Getting quote...' : `Swap ${sellToken?.symbol || ''} → ${buyToken?.symbol || ''}`}
                     </button>
-                    <button style={{
-                      width: '52px', height: '52px', borderRadius: '14px',
-                      background: '#ede9fe', border: 'none', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '20px',
-                    }}>💳</button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleSwap}
-                    disabled={!sellAmount || !sellToken || !buyToken || swapping}
-                    style={{
-                      width: '100%', padding: '16px', borderRadius: '14px', marginTop: '8px',
-                      background: !sellAmount ? '#ede9fe' : '#3b0764',
-                      color: !sellAmount ? '#8b8fa8' : 'white',
-                      border: 'none', fontSize: '16px', fontWeight: '700',
-                      cursor: !sellAmount ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {swapping ? 'Swapping...' : loading ? 'Getting quote...' : `Swap ${sellToken?.symbol || ''} → ${buyToken?.symbol || ''}`}
-                  </button>
-                )}
+                  )}
 
-                {/* Rejections and failures land here rather than in a browser
+                  {/* Rejections and failures land here rather than in a browser
                     alert, so the message sits next to the button that caused it. */}
-                {visibleNotice && (
-                  <div
-                    role="status"
-                    aria-live="polite"
-                    style={{
-                      display: 'flex', alignItems: 'flex-start', gap: '10px',
-                      marginTop: '8px', padding: '12px 14px', borderRadius: '14px',
-                      background: visibleNotice.kind === 'rejected' ? '#fffbeb' : '#fef2f2',
-                      border: `1px solid ${visibleNotice.kind === 'rejected' ? '#fde68a' : '#fee2e2'}`,
-                      color: visibleNotice.kind === 'rejected' ? '#92400e' : '#b91c1c',
-                    }}
-                  >
-                    <span style={{ fontSize: '15px', lineHeight: 1.3, flexShrink: 0 }}>
-                      {visibleNotice.kind === 'rejected' ? '✋' : '⚠️'}
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '2px' }}>
-                        {visibleNotice.kind === 'rejected' ? 'Request rejected' : 'Swap failed'}
-                      </div>
-                      <div style={{ fontSize: '12px', lineHeight: 1.5, wordBreak: 'break-word' }}>
-                        {visibleNotice.text}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setSwapNotice(null)}
-                      aria-label="Dismiss"
+                  {visibleNotice && (
+                    <div
+                      role="status"
+                      aria-live="polite"
                       style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        padding: 0, fontSize: '13px', lineHeight: 1,
-                        color: 'inherit', opacity: 0.6, flexShrink: 0,
+                        display: 'flex', alignItems: 'flex-start', gap: '10px',
+                        marginTop: '8px', padding: '12px 14px', borderRadius: '14px',
+                        background: visibleNotice.kind === 'rejected' ? '#fffbeb' : '#fef2f2',
+                        border: `1px solid ${visibleNotice.kind === 'rejected' ? '#fde68a' : '#fee2e2'}`,
+                        color: visibleNotice.kind === 'rejected' ? '#92400e' : '#b91c1c',
                       }}
                     >
-                      ✕
-                    </button>
-                  </div>
-                )}
+                      <span style={{ fontSize: '15px', lineHeight: 1.3, flexShrink: 0 }}>
+                        {visibleNotice.kind === 'rejected' ? '✋' : '⚠️'}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '2px' }}>
+                          {visibleNotice.kind === 'rejected' ? 'Request rejected' : 'Swap failed'}
+                        </div>
+                        <div style={{ fontSize: '12px', lineHeight: 1.5, wordBreak: 'break-word' }}>
+                          {visibleNotice.text}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setSwapNotice(null)}
+                        aria-label="Dismiss"
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          padding: 0, fontSize: '13px', lineHeight: 1,
+                          color: 'inherit', opacity: 0.6, flexShrink: 0,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
 
 
+
+                </div>
 
               </div>
 
-            </div>
-
-            {/* Only mounted once there's a real amount to quote — no
+              {/* Only mounted once there's a real amount to quote — no
                 placeholder panel sitting next to the card beforehand. */}
-            {hasSellAmount && (
-              <RouteDetails
-                quote={quote}
-                sellToken={sellToken}
-                buyToken={buyToken}
-                sellAmount={sellAmount}
-                loading={loading}
-                error={quoteError}
-                ethUsd={ethUsd}
-              />
-            )}
+              {hasSellAmount && (
+                <RouteDetails
+                  quote={quote}
+                  sellToken={sellToken}
+                  buyToken={buyToken}
+                  sellAmount={sellAmount}
+                  loading={loading}
+                  error={quoteError}
+                  ethUsd={ethUsd}
+                />
+              )}
 
             </div>
           </>
