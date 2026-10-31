@@ -24,7 +24,7 @@ import {
 } from './wallet'
 
 // Base Builder Code as an ERC-8021 suffix (no 0x prefix)
-const BUILDER_SUFFIX = '0x62635f737962336865616f0b0080218021802180218021802180218021'
+const BUILDER_SUFFIX = ''
 
 const ETH = {
   name: 'Ethereum',
