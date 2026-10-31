@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
     try {
         const res = await fetch(
-            `https://api.0x.org/swap/permit2/${endpoint}?${params}`,
+            `https://api.0x.org/swap/allowance-holder/${endpoint}?${params}`,
             {
                 headers: {
                     '0x-api-key': process.env.ZERO_X_API_KEY!,

@@ -458,14 +458,16 @@ function DEXApp() {
       const sellAddr = isNativeToken(sellToken) ? NATIVE_SENTINEL : sellToken.address
       const buyAddr = isNativeToken(buyToken) ? NATIVE_SENTINEL : buyToken.address
 
-      const quote = await getSwapQuote({
+      let quote: any = await getSwapQuote({
         sellToken: sellAddr,
         buyToken: buyAddr,
         sellAmount: sellAmountWei.toString(),
         taker: address,
       })
 
-      if (!quote.transaction) {
+      //if (!quote.transaction && !quote.issues?.allowance) {
+      //if (!quote.transaction) {
+      if (!quote.transaction && !quote.issues?.allowance) {
         notify('error', 'Could not build the swap transaction. Please try again.')
         setSwapping(false)
         return
@@ -501,6 +503,41 @@ function DEXApp() {
         } else {
           throw switchErr
         }
+      }
+
+      if (quote.issues?.allowance && !isNativeToken(sellToken)) {
+        stage = 'sign'
+        const spender: string = quote.issues.allowance.spender
+        const approveData =
+          '0x095ea7b3' +
+          spender.slice(2).toLowerCase().padStart(64, '0') +
+          sellAmountWei.toString(16).padStart(64, '0')
+
+        const approveHash = await ethereum.request({
+          method: 'eth_sendTransaction',
+          params: [{ from, to: sellToken.address, data: approveData }],
+        })
+
+        // wait for the approval to confirm (gives up after ~90s)
+        let receipt = null
+        for (let i = 0; i < 60 && !receipt; i++) {
+          await new Promise(r => setTimeout(r, 1500))
+          receipt = await ethereum.request({
+            method: 'eth_getTransactionReceipt',
+            params: [approveHash],
+          })
+        }
+        if (!receipt) throw new Error('Approval is taking too long. Check your wallet and try again.')
+        if (receipt.status === '0x0') throw new Error('Approval transaction failed. Please try again.')
+
+        // fresh quote now that the allowance exists
+        quote = await getSwapQuote({
+          sellToken: sellAddr,
+          buyToken: buyAddr,
+          sellAmount: sellAmountWei.toString(),
+          taker: address,
+        })
+        if (!quote.transaction) throw new Error('Could not build the swap after approval. Please try again.')
       }
 
       stage = 'sign'
