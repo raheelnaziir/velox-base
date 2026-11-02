@@ -15,5 +15,4 @@ When you hit Swap, the app fetches a full quote with transaction calldata, then 
 
 ---
 
-Built by [@isbburger](https://x.com/isbburger)
 
